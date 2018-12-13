@@ -33,14 +33,12 @@ parametrically with R.
 
 Author: colinhelms@outlook.com
 
-Version 1.12
-
 Change Log:
-(1.1) 23 Jan 2018 16:22 Error in sign corrected in function alfano_Pprime.
-(1.12) 26 Apr 2018 13:14, costate correction.
-(1.13) 05 May 2018 20:05, found error in derivative_cmp_ell_int_1st,
+23 Jan 2018 - Error in sign corrected in function alfano_Pprime.
+26 Apr 2018 - costate correction.
+05 May 2018 - found error in derivative_cmp_ell_int_1st,
     corrected complex conjugate.
-(1.14) 06 May 2018, added 3D plot of costate versus u and orbit ratio, R.  
+06 May 2018 - added 3D plot of costate versus u and orbit ratio, R. 
 """
 import numpy as np
 from scipy import special
