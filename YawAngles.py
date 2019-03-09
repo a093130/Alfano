@@ -47,16 +47,17 @@ Created on Sat Apr 28 11:11:52 2018
     05/18/2018, added test cases and adjusted signatures for GMAT call.
     05/20/2018, changed name of input files, integration with GMAT.
     06/01/2018, added logic for Kluever eclipse weighting, and test case.
+    03/06/2019, added workaround for automating dual 28.5 or 51.6 inclinations.
 """
 import numpy as np
 import json as js
 #import xlwings as wings
 
-""" The following path is specific to use within GMAT """
-#jfile = r'..\userfunctions\python\Controls.json'
+""" The following path is specific to use within GMAT. """
+jfile = [r'..\userfunctions\python\Controls-0.36.json', r'..\userfunctions\python\Controls-0.64.json']
 
 """ Use this alternatepath for debug within the development environment """
-jfile = r'.\Controls.json'
+#jfile = [r'.\Controls-0.36.json', r'.\Controls-0.64.json']
 
 """ GMAT is having trouble locating the win32api module
 Windows features must be disabled for use in GMAT """
@@ -98,7 +99,7 @@ Windows features must be disabled for use in GMAT """
 #    """GMAT can only accept one dimensional arrays """
 #    return Control
 
-def get_control_onrev (TA, SMA, SMA_init = 6838.1366):
+def get_control_onrev (TA, SMA, SMA_init = 6838.1366, incl_init=28.5):
     """ Function provides a wrapper to perform conversions from SMA in km
     to the orbit ratio; the given SMA is divided by SMA_init.  SMA_init is
     set to the canonical Earth radius to avoid divide by zero, but the 
@@ -124,12 +125,12 @@ def get_control_onrev (TA, SMA, SMA_init = 6838.1366):
     
     orbit_r = SMA/SMA_init
     
-    V, N = get_control(TA, orbit_r, True)
+    V, N = get_control(TA, orbit_r, True, incl_init)
     B = 0.0
         
     return [V, N, B]
 
-def get_control (TA, orbit_r, useJSON):
+def get_control (TA, orbit_r, useJSON, incl_init):
     """ Function implements the Edelbaum control law.
     
             yaw_angle = arctan[cos(TA)/sqrt(1/u - 1)].
@@ -167,11 +168,11 @@ def get_control (TA, orbit_r, useJSON):
     """
     
     """ The Yaw Angle is defined negative for reducing inclination. """
-    theta = -1 * get_yaw_angle (TA, orbit_r, useJSON)
+    theta = -1 * get_yaw_angle (TA, orbit_r, useJSON, incl_init)
     
     return [np.cos(theta), np.sin(theta)]
 
-def get_yaw_angle (TA, orbit_r, useJSON):
+def get_yaw_angle (TA, orbit_r, useJSON, incl_init):
     """ Function implements the Edelbaum control law.  Returns the yaw angle
     in degrees.  This function is good for plots.
         
@@ -189,7 +190,7 @@ def get_yaw_angle (TA, orbit_r, useJSON):
     
     """ Use method selected """
     if useJSON:
-        sf = scale_fm_json(orbit_r)
+        sf = scale_fm_json(orbit_r, incl_init)
     else:
 #        sf = scale_fm_xlsx(orbit_r)
         print('Not implemented because of GMAT issue with win32api.')
@@ -215,10 +216,18 @@ def get_yaw_angle (TA, orbit_r, useJSON):
     
 #    return get_yaw_sf(orbit_r, data)
 
-def scale_fm_json(orbit_r):
+def scale_fm_json(orbit_r, incl_init):
     """ Function looks up scale factor in JSON file. """
     
-    with open(jfile, 'r+') as fp:
+    """ TODO: replace. This is a temporary workaround. """     
+    if  (28.45 < incl_init) and (incl_init < 28.55):
+        file = jfile[0]
+    elif (51.55 < incl_init) and (incl_init < 51.65):
+        file = jfile[1]
+    else:
+        file = ""
+    
+    with open(file, 'r+') as fp:
         data = js.load(fp)
         
     return get_yaw_sf(orbit_r, data)
@@ -295,14 +304,32 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(2,1)
 
     """ Test Case 1: Plot the values of Yaw angles useJSON = True """
-    angles21 = get_yaw_angle (TA, 1.1, True)
+    angles21 = get_yaw_angle (TA, 1.1, True, 51.6)
     axs[0].set_title('Yaw Angle at R=1.1, Costate -0.64')
     axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(TA, angles21)
    
-    angles61 = get_yaw_angle (TA, 6.13, True)
+    angles61 = get_yaw_angle (TA, 6.13, True, 51.6)
     axs[1].set_title('Yaw Angle at R=6.13, Costate -0.64')
+    axs[1].set_xlabel('Arg of Latitude')
+    axs[1].set_ylabel('Yaw(radians)')
+    plot61 = axs[1].plot(TA, angles61)
+ 
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+    fig, axs = plt.subplots(2,1)
+
+    angles21 = get_yaw_angle (TA, 1.1, True, 28.5)
+    axs[0].set_title('Yaw Angle at R=1.1, Costate -0.36')
+    axs[0].set_xlabel('Arg of Latitude')
+    axs[0].set_ylabel('Yaw(radians)')
+    plot21 = axs[0].plot(TA, angles21)
+   
+    angles61 = get_yaw_angle (TA, 6.13, True, 28.5)
+    axs[1].set_title('Yaw Angle at R=6.13, Costate -0.36')
     axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(TA, angles61)
