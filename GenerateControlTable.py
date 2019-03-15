@@ -59,41 +59,15 @@ Change Log:
     13 May 2018, added mainline code to generate YawAngleGenerator.xlsx.
     15 May 2018, added functions to read workbook, write ControlScaleFactors.json.
     20 May 2018, changed names of output files to be more general and terse.
+    09 Mar 2019, added capabilty to generate full controls in Transfer sheet.
 """
 import numpy as np
-import json as js
 import xlsxwriter as xl
-import xlwings as wings
 import AlfanoLib as alf
 
 xfile = '.\\Controls.xlsx'
 jfile = '.\\Controls.json'
-
-def export_yaw_sf():
-    """ Function is used to write out a JSON file containing a 2x901 array
-    of computed Alfano yaw control scale factors by orbit ratio.
-    
-    The structure of the json file is,     
-    [[Ri, Yi], 
-    [R1+1, Yi+1], 
-    ..., 
-    [Rn, Yn]]
-    where Ri is the current orbit ratio and Yi is the corresponding value of yaw 
-    angle at cos(TA) = 1.
-    """
-
-    wb = wings.Book(xfile)
-    sht = wb.sheets('trajectory')
-    #data = sht.range('A2:B902').options(np.array, ndim=2).value
-    #Unfortunatesly json does not handle np.array
-    data = sht.range('A2:B902').value
-    
-    """ Dump data to JSON formatted text file """
-    with open(jfile, 'w+') as fp:
-        js.dump(data,fp)
-    
-    return data
-    
+   
 if __name__ == "__main__":
     """
     Test case for AlfanoLib
@@ -101,11 +75,7 @@ if __name__ == "__main__":
     import matplotlib as mpl
     from mpl_toolkits.mplot3d import Axes3D 
     import matplotlib.pyplot as plt
-        
-    size=500
-    u = np.linspace(0, 1, size)
-    a = np.linspace(1, 10, size)
-    
+            
     wb = xl.Workbook(xfile, {'nan_inf_to_errors': True})
     cell_format1 = wb.add_format() 
     cell_format1.set_text_wrap()
@@ -123,54 +93,57 @@ if __name__ == "__main__":
     """
     summary_textB1 = ('Calculations per Wiesel and Alfano,'
                       '1983, "Optimal Many-Revolution Orbit Transfer"')
-    summary_textA2 = ('Description:')
+    summary_textA2 = ('Description: ')
     summary_textB3 = ('This workbook is designed to permit interpolation '
-                      'of the Alfano yaw control variable from numerical '
-                      'computations for the inclination lambda value (costate) '
-                      'from the orbit ratio (Orbit R) and the control variable (cv).')
+                      'of the Alfano yaw control variable (cv) by orbit ratio. '
+                      'This is accomplished by a shooting method. The value of cv '
+                      'is calculated for a linear vector of values of the Lagrangian '
+                      'multiplier (lambda), for increasing values of orbit ratio. ')
     summary_textB4 = ('Due to the form of the differential equations of motion, ' 
                       'which contain elliptic integrals and their derivatives, ' 
                       'it is not possible to directly solve for the control variable. ' 
-                      'However, it is possible to back-compute the lambda values. '
-                      'from a knowledge of cv and the orbit ratio.')
-    summary_textB5 = ('The orbit ratio has been written to rows in sheet '
-                      '"orbit R" as a linear series from 1-to-10 in intervals '
-                      'of 0.01.')
-    summary_textB6 = ('Values of the control variable have been written to '
-                      'columns in sheet "cv" as a linear series equal in size '
-                      'to orbit ratio.  The cv is computed with seven digit precision.')
+                      'This requires the shooting method, for the two-value boundary '
+                      'value problem solution, where the boundaries are initial '
+                      'conditions at the initial value and final value of orbit ratio. ')
+    summary_textB5 = ('The orbit ratio is elaborated as a linear series from 1-to-10 
+                      'in intervals of 0.01. These values are written to rows in sheet '
+                      '"orbit R"')
+    summary_textB6 = ('Values of the control variable are the domain of the Alphano Phi '
+                      'function and have been written to columns in sheet "cv" as a linear '
+                      'series. The cv is computed with seven digit precision.')
     summary_textB7 = ('The values of lambda computed from the series of orbit R and cv '
-                      'are written to the rows and columns of sheet "costate" in '
-                      'cells corresponding to the domain values of orbit ratio and cv.')
+                      'are the range of the Alphano Phi function.  These are '
+                      'written to the rows and columns of sheet "costate" such that '
+                      'rows corresponding to the values of orbit ratio and columns '
+                      'corresponding to the values of cv also select the generating '
+                      'value of lambda.')
     summary_textB8 = ('Knowing lambda, and the orbit ratio, the value of cv '
                       'that corresponds can be found with a Join of the three, '
-                      'tables.  This is done on sheet "trajectory" using Excel '
+                      'tables.  This is done on sheet "traj" using Excel '
                       'Match macros to find the appropriate row and column from '
                       'sheets "orbit R" and "costate".')
-    summary_textB9 = ('Obviously there is error in the calculations, '
-                      ' especially since Match only works by finding the column '
-                      'of the value of costate less than or equal to the given value. '
+    summary_textB9 = ('There is systematic error in the calculations performed by "Match". '
+                      ' works by finding the column less than or equal to the given value.'
                       'This error can be decreased by increasing the resolution '
-                      'of the tables.')
+                      'of the tables, or by directly computing the row and column index.')
     summary_textB10 = ('The current resolution of 500 x 500 has been chosen because '
-                       ' there are roughly 500 revolutions in the astrodynamics '
+                       ' there are roughly 500 revolutions in the astrodynamics'
                        'simulation to achieve the geosynchronous orbit ratio (6.13).')
-    summary_textB11 = ('The first two columns of sheet "Trajectory" are computed '
-                       'in order to be written out to the astrodynamics computation. '
-                       'The value of max yaw is used to adjust the values of the '
-                       'yaw thrust angle for each revolution, where the orbit ratio '
-                       'increases for each revolution.')
-    summary_textB12 = ('It is expected that a 500x500 table of costate has adequate '
-                       'precision for the astrodynamics computation since the thruster '
-                       'direction is only accurate to a few tens of arc seconds and '
-                       'the precision of the yaw angle in the table is 36 arcseconds.')
+    summary_textB11 = ('Sheet "Transfer"  contains the complete elaboration of cv by '
+                       'lambda and orbit ratio, using the Match macro. This table is '
+                       'available to be exported as a JSON file to the astrodynamics  '
+                       'simulation. ')
+    summary_textB12 = ('It is expected that a 901x295 table of costate has adequate '
+                       'precision for the astrodynamics computation notwithstanding the '
+                       'bias error in the Match macro.')
         
     summarySht = wb.add_worksheet('summary')
     orbitSht = wb.add_worksheet('orbit_R')
     costateSht = wb.add_worksheet('costate')
     controlSht = wb.add_worksheet('cv')
     phiSht = wb.add_worksheet('inv_phi')
-    trajSht = wb.add_worksheet('trajectory')
+    trajSht = wb.add_worksheet('Traj')
+    xferSht = wb.add_worksheet('Transfers')
     
     """ Write out the documentation """    
     summarySht.write_string('B1', summary_textB1, cell_format1)
@@ -190,6 +163,21 @@ if __name__ == "__main__":
     summarySht.set_column('B:B',76)
   
     """ write out the costates as functions of cv and a, where i in a and j in cv """
+    nrows=901
+    ncols=500
+    """ The resultant costate table that is generated should be 901 rows of orbit ratio
+    in the range of 1.00 to 10.00 by steps of 0.01 and 295 columns of lambda 
+    in 0.005 steps from -0.100 to -1.570 (with possibly greater precision to come). 
+    The Alphano Phi function has orbit ratio and cv as its domain and lambda as its range.
+    The algorithm is to apply Phi() to an m x n matrix of values of u, multiply it by
+    a 901 element vector of orbit ratio to obtain a 295 element vector of lambda.  It is
+    theoretically possible to multiply the inverse of the matrix of Phi(u) by a vector of
+    lambda to obtain the orbit ratio, however not so generally useful in simulation as to
+    specify the values of orbit ratio and let lambda be interpolated.
+    """
+    u = np.linspace(0, 1, 590)
+    a = np.linspace(1, 10, 901)
+
     L = np.zeros((size,size))
     X = np.zeros((size,size))
     Y = np.zeros((size,size))
@@ -294,6 +282,11 @@ if __name__ == "__main__":
     
     trajSht.set_column('E:E',12)
     trajSht.activate()    
+    
+    """ TODO: Write the Transfer Sheet
+    =INDEX(cv!$A$1:$SF$500,MATCH($D2,'orbit R'!$A:$A,1),MATCH(E$1,INDIRECT(CONCAT("costate!",$A2,":",$A2)),-1))
+    """
+    
     """ Do wireframe Plot of costate """
     
     mpl.rcParams['legend.fontsize'] = 10
