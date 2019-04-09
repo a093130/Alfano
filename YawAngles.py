@@ -47,36 +47,42 @@ Created on Sat Apr 28 11:11:52 2018
     05/18/2018, added test cases and adjusted signatures for GMAT call.
     05/20/2018, changed name of input files, integration with GMAT.
     06/01/2018, added logic for Kluever eclipse weighting, and test case.
-    03/06/2019, added workaround for automating dual 28.5 or 51.6 inclinations.
+    03/06/2019, added costate parameter to automate variable inclinations.
+    04/08/2019, Controls.json greatly expanded for all costates.
+    04/09/2019, AOL correction in get_yaw_angle() to align maximum angle pi/2 from nodes.
 """
+
+#import sys
 import platform
+#import base64
 import getpass
 import logging
 import traceback
 import numpy as np
 import json as js
 
-""" The following path is specific to use within GMAT. """
-jfile = r'..\userfunctions\python\Controls.json'
+import AlfanoLib as alf
 
-""" Use this alternatepath for debug within the development environment """
-#jfile = r'.\Controls.json'
+PREC_ORBITR = delta_a = 0.01
+""" Precision in orbit ratio must be the same as GenerateControlTable.py """
+PREC_COSTATE = delta_l = 0.001
+""" Precision in lambda must be the same as GenerateControlTable.py """
+mu = 1
+""" Use canonical values for orbit elements.  Solve for time and velocity using mu = 1 """
+nrows = int(round(1 + (10 - 1)/delta_a, 0))
+""" Orbit Ratio varies from 1 - 10 """
+ncols = int(round((np.pi/2 - 0.1)/delta_l, 0))
+""" Lambda, l, varies from 0.1 to pi/2 """
+halfpi = np.pi/2
 
-""" GMAT is having trouble locating the win32api module
-Windows features must be disabled for use in GMAT """
-#xfile = r'.\Controls.xlsx'
-
-PREC_COSTATE =  0.005
-PREC_ORBITR = 0.01
-
-def get_control_onrev (AOL, SMA, SMA_init = 6838.1366, more = -1, costate = -0):
+def get_control_onrev (costate, AOL, SMA, SMA_init = 6838.1366, more = True):
     """ Function provides a wrapper to perform conversions from SMA in km
     to the orbit ratio; the given SMA is divided by SMA_init.  SMA_init is
     set to the canonical Earth radius to avoid divide by zero, but the 
     caller should pass in the SMA of the starting orbit to get correct results.
     
     Function checks for completed revolution and calls get_yaw_angle() with 
-    given TA and computed orbit_r, sets TA_init equal to the current TA, else
+    given AOL and computed orbit_r, sets AOL_init equal to the current AOL, else
     returns original yaw angle.
     
     Future: eclipse effects will accounted for in function set_apsides().
@@ -85,33 +91,43 @@ def get_control_onrev (AOL, SMA, SMA_init = 6838.1366, more = -1, costate = -0):
         [Thrust vector components in Velocity-Normal-Bi-normal coordinates]
         
     Parameters:
-        AOL: argument of latitude in degrees
+        AOL: argument of longitude in degrees
         SMA: the current SMA in kilometers
         SMA_init: the SMA of the initial orbit in kilometers
         more: defines the direction of the yaw angle, 
-            defined negative for reducing inclination.
+            True increases inclination, False decreases inclination.
         costate: the lambda inclination solution.
     """
     if (costate >= -1.570) and (costate <= -0.100):
-        if SMA_init >= 1.0:
+        if SMA_init >= 6338.1366:
             orbit_r = SMA/SMA_init
         else:
-            raise ZeroDivisionError("SMA_init %d is invalid." % SMA_init)
-    
-    if (orbit_r == 0) or (orbit_r > 10):
-        raise ValueError ("Orbit ratio %d is invalid value." % orbit_r)
+            raise ValueError("SMA_init {0} is invalid.".format(SMA_init))
+    else:
+        raise BadCostate("Value {0} is out of range.".format(costate))
         
-        V, N = get_control(AOL, orbit_r, True, more, costate)
+    if (orbit_r >= 1) and (orbit_r <= 10):
         B = 0.0
+        """ For combined orbit-raising and inclination change the binormal thrust angle (pitch) is 0. """
+        
+        if more:
+            V, N = get_control(costate, AOL, orbit_r, 1)
+            """ increasing inclination """
+        else:
+            V, N = get_control(costate, AOL, orbit_r, -1)
+            """ decreasing inclination """
         
         return [V, N, B]
+    
     else:
-        raise BadCostate("Value %d is out of range." % costate)
+        raise ValueError ("Orbit ratio {0} is invalid value.".format(orbit_r))
+        
 
-def get_control (AOL, orbit_r, more, costate):
+
+def get_control (costate, AOL, orbit_r, nmore):
     """ Function implements the Edelbaum control law.
     
-            yaw_angle = arctan[cos(TA)/sqrt(1/u - 1)].
+            yaw_angle = arctan[cos(AOL)/sqrt(1/u - 1)].
         
         where u is indexed by orbit_r and costate in the controls.json file
         
@@ -140,13 +156,12 @@ def get_control (AOL, orbit_r, more, costate):
             Components of thrust in VNB coordinates.
         
         Parameters:
-            AOL: the angular position, in degrees 
+            AOL: the angular position from the line of nodes, in degrees 
             orbit_r: the current orbit ratio
-            useJSON: two methods of finding sf are used.
-            more: defines the direction of the yaw angle, 
+            nmore: +/1, defines the direction of the yaw angle, 
                 defined negative for decreasing inclination.
     """
-    theta = more * get_yaw_angle (AOL, orbit_r, costate)
+    theta = nmore * get_yaw_angle (AOL, orbit_r, costate)
     
     return [np.cos(theta), np.sin(theta)]
 
@@ -158,99 +173,25 @@ def get_yaw_angle (AOL, orbit_r, costate):
             Thrust angle in radians.
         
         Parameters:
-            TA: the true anomaly, in degrees 
+            AOL: the angular position from the line of nodes, in degrees 
             orbit_r: the current orbit ratio  
     """
     
-    """ GMAT provide degrees, np.cos expects radians """
-    """ GMAT provides degrees, np.cos expects radians """
     AOL = AOL*(np.pi/180)
+    """ GMAT provides degrees, np.cos expects radians """
     
-    cv = cv_fm_json(orbit_r, costate)
+    cv = CControls().get_yaw_sf(orbit_r, costate)
     
-    sf = np.sqrt(1/cv - 1)
-    
-    theta = np.arctan(np.cos(AOL)/sf)
+    if cv != 1 :
+        sf = np.sqrt(1/cv - 1)
+
+        #theta = np.arctan(np.cos(AOL)/sf)
+        theta = np.arctan(np.sin(AOL)/sf)
+        """ Make a pi/2 correction to align maximum yaw pi/2 from nodes. """
+    else:
+        theta = 0
     
     return theta
-
-#def scale_fm_xlsx(orbit_r):
-    """ [Deprecated Function will find or open an instance of an Excel server and 
-    retrieve the yaw angle for a given orbit ratio.  The orbit ratio
-    is interpolated to 0.01 precision.
-    
-    Requirements: Windows platform and an instance of Excel 2007 or later.
-    Note that in the unlikely occasion that two Excel servers have the
-    Controls workbook open, this code will select the first instance.
-    
-    Excel method not implemented because of GMAT issue with win32api.
-    """    
-#    wb = wings.Book(xfile)
-#    sht = wb.sheets('trajectory')
-#    data = sht.range('A2:B902').value
-    
-#    return get_yaw_sf(orbit_r, data)
-
-def cv_fm_json(orbit_r, costate):
-    """ Function looks up control variable in JSON file. 
-    returns the denominator of the control function."""
-    try:  
-        with open(jfile, 'r+') as fp:
-            ltable = js.load(fp)           
-            
-            return get_yaw_sf(orbit_r, costate, ltable)
-    
-    except FileNotFoundError as e:
-        e.__cause__ = "YawAngles.py::scale_fm_json()"
-        raise
-    
-    except Exception as e:
-        e.__cause__ = "YawAngles.py::scale_fm_json()"
-        raise
-  
-def get_yaw_sf(orbit_r, costate, ltable):
-    """ Function is used to parse a 296x902 array
-    of computed Alfano yaw control values by rows of orbit ratio and columns of 
-    costate (aka lambda).
-    
-    The structure of the JSON data is: 
-    [Lk [[Rj, Xi, Xi+1,...,Xn], [Rj+1, Xi, Xi+1,...,Xn],...,[Rj+m, Xi, Xi+1,...,Xn]],
-    [Lk+1 [[Rj, Yi, Yi+1,...,Yn], [Rj+1, Yi, Yi+1,...,Yn],...,[Rj+m, Yi, Yi+1,...,Yn]],
-    ...,
-    [Lk [[Rj, Zi, Zi+1,...,Zn], [Rj+1, Zi, Zi+1,...,Zn],...,[Rj+m, Zi, Zi+1,...,Zn]]
-
-    Where Lk is the selected Lambda, k: 1-296, Rj is the current orbit ratio, j"1-902 
-    and Xi, Yi, Zi are the corresponding values of cv, i: 1-296. 
-    
-    This function assumes an external python call to read the JSON file 
-    has been made in the outer scope.
-    """
-    col_error = np.mod(costate, 0.005)
-    if col_error > 0:
-        logging.warn("Costate value %d has higher precision %d than control table supports.", costate, col_error)    
-    
-    col = -int(19 + np.round(costate, 3)/PREC_COSTATE)
-    """ Formula gives column index 1 - 295, offset 1 row to account for heading.
-    
-    PREC_COSTATE = 0.005 (ControlsV1)
-    
-    If the shape of the controls table is changed in columns, the PREC_COSTATE must be 
-    adjusted.
-    """
-    row_error = np.mod(orbit_r, 0.01)
-    if row_error > 0:
-        logging.warn("Orbit Ratio value %d has higher precision %d than control table supports.", costate, row_error)    
-
-    row = int(1 + np.round(orbit_r - 1, 2)/PREC_ORBITR)
-    """ Formula gives row index 1 - 901, offset 1 row to account for heading.
-    
-    PREC_ORBITR = 0.01 (ControlsV1)
-    
-    If the shape of the controls table is changed in rows, the PREC_ORBITR must be 
-    adjusted.    
-    """
-
-    return ltable[row][col]
 
 def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
     """ This function computes the shadow arc computation from Vallado,
@@ -292,34 +233,180 @@ def eclipse_weight(beta, P, RMAG):
     sharc = shadow_arc(beta, P, RMAG)
     return 1 - sharc/(2*np.pi)
 
+#def loads(*args, **kwargs):
+#    """ Overload loads to use the decoder callback. """
+#    kwargs.setdefault('object_hook', cb_json_to_ndarray)    
+#    return js.loads(*args, **kwargs)
+
+def load(*args, **kwargs):
+    """ Overload load to use the decoder callback. """
+    kwargs.setdefault('object_hook', cb_json_to_ndarray)
+    
+    return js.load(*args, **kwargs)
+
+def cb_json_to_ndarray(dct):
+    """ Callback to decode a JSON encoded numpy ndarray.
+    The shape and dtype is stored in the dictionary returned from NumpyDecoder
+    Returns ndarray.
+    
+    base64.b64decode credit to Adam Hughes, and hpaulj on Stack Overflow,
+    https://stackoverflow.com/questions/27909658/
+    json-encoder-and-decoder-for-complex-numpy-arrays/27948073#27948073
+    Status: not working, as a workaround, Controls.json stores a python list 
+    rather than ndarray.
+
+    Parameters:
+        dct: (dict) json encoded ndarray
+    """
+#    if isinstance(dct, dict) and '__ndarray__' in dct:
+#        data = base64.b64decode(dct['__ndarray__'])        
+#        return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
+#        return np.frombuffer(data, dtype=dct['dtype']).reshape(dct['shape'])
+    
+    if (dct, dict):
+        
+        return(dct)
+
+class BadStructure(Exception):
+    def __init__(self, message):
+        self.message = message
+        self.__doc__ = "Shape mismatch between structures."
+
 class BadCostate(Exception):
     def __init__(self, message):
         self.message = message
         self.__doc__ = "Bad Costate"
+
+class CControls():
+    """ This class is designed as a Singleton instance.  Manage the JSON file of controls. 
+    UbyRbyL, delta_a, delta_l, mu, nrows, ncols, halfpi are shared with GenerateControlTable.py.
+    
+    TODO: factor out all the shared datastructures and variables into a common module.
+    """
+    _instances = {}
+    
+    _fp = None
+    """ File pointer """
+    _u = np.round(0.1 * np.linspace(1, 10, ncols, endpoint=False), 4)
+    """ This is the 1470 element domain of cv from 0 - 1, excluding singularities. """
+    _a = np.round(np.linspace(1, 10, nrows), 2)
+    """ This is the 901 element domain of orbit ratio. """    
+
+    _vec_k = alf.cmp_ell_int_1st_kind(_u)
+    _vec_e = alf.cmp_ell_int_2nd_kind(_u)
+    _vec_dk = alf.derivative_cmp_ell_int_1st(_u, _vec_k, _vec_e)
+    _vec_de = alf.derivative_cmp_ell_int_2nd(_u, _vec_k, _vec_e)
+    _vec_p = alf.alfano_P(_u, _vec_k)
+    _vec_dp = alf.alfano_Pprime(_u, _vec_k, _vec_dk)
+    _vec_r = alf.alfano_R(_u, _vec_k, _vec_e)
+    _vec_dr = alf.alfano_Rprime(_u, _vec_r, _vec_e, _vec_dk, _vec_de)  
+    _vec_phi = alf.alfano_phi(_vec_r, _vec_p, _vec_dr, _vec_dp)
+
+    _lcanon = np.round(halfpi * (mu/np.sqrt(1)) * 1/_vec_phi, 4)
+    
+    _UbyRbyL = {l: np.zeros(nrows) for l in _lcanon}
+  
+    def __new__(CControls, *args, **kwargs):
+        """ Make this class a Singleton """
+        if CControls not in CControls._instances:
+            CControls._instances[CControls] = super().__new__(CControls)
+            
+        return CControls._instances[CControls]
+             
+    @classmethod
+    def read_controlfile(cls, ctlfil = r'..\userfunctions\python\Controls.json'):
         
+        try:
+            with open(ctlfil, 'r') as cls._fp:
+                dct = load(cls._fp)
+                                
+        except OSError as e:
+            print("OSError reading JSON file: {0} {1}".format(e.filename, e.strerror))
+            #exit
+    
+        except Exception as e:
+            lines = traceback.format_exc().splitlines()
+            print("Exception reading JSON file: {0}\n{1}\n{2}".format(e.__doc__, lines[0], lines[-1]))
+            #exit
+        
+        for l in cls._UbyRbyL:
+            """ Parameter dct is a dictionary of lists, key is a string.
+            convert to ndarray with key as float64. Loop is elaborated for debug."""
+                        
+            try:
+                U = np.array(dct[str(l)])
+                #print ('np.array(dct[str(l)]) = {0}'.format(U))
+                cls._UbyRbyL[l] = U
+                
+            except Exception as e:
+                lines = traceback.format_exc().splitlines()
+                print("Exception loading UbyRbyL dictionary: {0}\n{1}\n{2}".format(e.__doc__, lines[0], lines[-1]))
+                break
+            
+    @classmethod        
+    def get_yaw_sf(cls, orbit_r, costate) :
+        """ Function looks up control variable in JSON file based on costate. 
+        returns the denominator of the control function.
+        Changed 08Apr2019: complete table of costates is searched.
+        """
+        if cls._fp == None:
+            cls.read_controlfile()
+            
+        costate = np.round(costate, 4)
+        r = np.round(orbit_r, 2)
+        
+        row = int(round(1 + r/delta_a, 0)) - 100
+
+        return cls._UbyRbyL[costate][row]             
+
+read_controlfile = CControls().read_controlfile
+""" This is equivalent to a static method in C++ """        
+get_yaw_sf = CControls().get_yaw_sf
+""" This is equivalent to a static method in C++ """
+    
 if __name__ == "__main__":
     """    Test cases     """
+        
+    logging.basicConfig(
+            filename='./GenControls.log',
+#            level=logging.INFO,
+            level=logging.DEBUG,
+            format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', datefmt='%d%B%Y_%H:%M:%S')
+
+    logging.info("!!!!!!!!!! Control Table Generation Started !!!!!!!!!!")
+    
+    host_attr = platform.uname()
+    logging.info('User Id: %s\nNetwork Node: %s\nSystem: %s, %s, \nProcessor: %s', \
+                 getpass.getuser(), \
+                 host_attr.node, \
+                 host_attr.system, \
+                 host_attr.version, \
+                 host_attr.processor)
+    
+    """ Test Case 0: initialized dictionary structure from file. Fundamental to other test cases."""
+    read_controlfile(r'.\Controls.json')
+       
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     
-    TA = np.linspace(0, 360, 60)
+    AOL = np.linspace(0, 360, 60)
     
     mpl.rcParams['legend.fontsize'] = 10
     
     fig, axs = plt.subplots(2,1)
 
     """ Test Case 1: Plot the values of Yaw angles useJSON = True """
-    angles21 = get_yaw_angle (TA, 1.1, True, 51.6)
-    axs[0].set_title('Yaw Angle at R=1.1, Costate -0.64')
+    angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
+    axs[0].set_title('Yaw Angle at R=1.1, Costate -0.1186')
     axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
-    plot21 = axs[0].plot(TA, angles21)
+    plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (TA, 6.13, True, 51.6)
-    axs[1].set_title('Yaw Angle at R=6.13, Costate -0.64')
+    angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
+    axs[1].set_title('Yaw Angle at R=6.13, Costate -0.1186')
     axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
-    plot61 = axs[1].plot(TA, angles61)
+    plot61 = axs[1].plot(AOL, angles61)
  
     plt.tight_layout()
     plt.show()
@@ -327,40 +414,21 @@ if __name__ == "__main__":
 
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (TA, 1.1, True, 28.5)
-    axs[0].set_title('Yaw Angle at R=1.1, Costate -0.36')
-    axs[0].set_xlabel('Arg of Latitude')
+    angles21 = get_yaw_angle (AOL, 1.1, -0.4284)
+    axs[0].set_title('Yaw Angle at R=1.1, Costate -0.4284')
+    axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
-    plot21 = axs[0].plot(TA, angles21)
+    plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (TA, 6.13, True, 28.5)
-    axs[1].set_title('Yaw Angle at R=6.13, Costate -0.36')
-    axs[1].set_xlabel('Arg of Latitude')
+    angles61 = get_yaw_angle (AOL, 6.13, -0.4284)
+    axs[1].set_title('Yaw Angle at R=6.13, Costate -0.4284')
+    axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
-    plot61 = axs[1].plot(TA, angles61)
+    plot61 = axs[1].plot(AOL, angles61)
     
     plt.tight_layout()
     plt.show()
     plt.close()
-
-    """ Test Case 2: Plot the values of Yaw angles using Excel, useJSON = False """
-#    fig, axs = plt.subplots(2,1)
-    
-#    angles21 = get_yaw_angle (TA, 1.1, False)
-#    axs[0].set_title('Excel Test Case: Yaw Angle at R=1.1')
-#    axs[0].set_xlabel('TA')
-#    axs[0].set_ylabel('Yaw(radians)')
-#    plot21 = axs[0].plot(TA, angles21)
-   
-#    angles61 = get_yaw_angle (TA, 6.1, False)
-#    axs[1].set_title('Excel Test Case: Yaw Angle at R=6.1')
-#    axs[1].set_xlabel('TA')
-#    axs[1].set_ylabel('Yaw(radians)')
-#    plot61 = axs[1].plot(TA, angles61)
-    
-#    plt.tight_layout()
-#    plt.show()
-#    plt.close()
 
     """ Test Case 3: Thrust Components per Revolution.  
     This test case uses a logic similar to that incorporated in the 
@@ -368,8 +436,8 @@ if __name__ == "__main__":
     Reference "Simulating Alfano Trajectory with GMAT", author's report.
     
     State:
-        TA = np.linspace(0, 360, 60)
-        TA_init = 99.88774933204886
+        AOL = np.linspace(0, 360, 60)
+        AOL_init = 99.88774933204886
         Thrust_init = [1,0,0]
         SMA, variable
         SMA_init = 6838.1366
@@ -392,9 +460,9 @@ if __name__ == "__main__":
     
     R_init = 1
     R_final = 10
-    TA_init = 99.8877493
+    AOL_init = 0
     
-    Thrust=[0,1.0,0]
+    Thrust=[0, 1.0, 0]
     
     with open('thrustlog.log', 'w+') as log:
         log.write('Test Case 3\n')
@@ -406,8 +474,14 @@ if __name__ == "__main__":
             log.write(subheading)
             log.write('\n')
             
-            for theta in TA:
-                V, N, B = get_control_onrev (theta, SMA, SMA_init)
+            for theta in AOL:
+                V, N, B = get_control_onrev (-0.3289, theta, SMA, more=False)
+                """costate, AOL, SMA, SMA_init = 6838.1366, more = True"""
+                js.dump([theta, V, N], log)
+                log.write('\n')
+    
+                V, N, B = get_control_onrev (-0.4284, theta, SMA, more=False)
+                """costate, AOL, SMA, SMA_init = 6838.1366, more = True"""
                 js.dump([theta, V, N], log)
                 log.write('\n')
     

@@ -38,8 +38,11 @@ Change Log:
 26 Apr 2018 - costate correction.
 05 May 2018 - found error in derivative_cmp_ell_int_1st,
     corrected complex conjugate.
-06 May 2018 - added 3D plot of costate versus u and orbit ratio, R. 
+06 May 2018 - added 3D plot of costate versus u and orbit ratio, R.
+29 Mar 2019 - corrected alfano_phi() to return phi() rather than its reciprocal.
+    updated costate to account for this change. 
 """
+
 import numpy as np
 from scipy import special
 
@@ -215,9 +218,7 @@ def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> 
     Note that phi evaluates to 0 as u -> 0.1.
     """
     
-    f = P*(dR/dP) - R
-
-    return (1/f)
+    return (P*(dR/dP) - R)
 
 def costate(phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     """
@@ -232,11 +233,8 @@ def costate(phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     
     Returns:
     Array of lambda values as a function of phi
-    """   
-    a = np.sqrt(sma)
-    m = np.sqrt(mu)
-    
-    return (np.pi/2)*(m/a)*phi
+    """     
+    return ((np.pi/2) * np.sqrt(mu/sma) * 1/phi)
 
 def yaw_scalefactor (u):
 	""" Convenience function that returns the correct form of the denominator in the
