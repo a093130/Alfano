@@ -1,5 +1,7 @@
 *.log
 *.pyc
 *.png
+*.xlsl
+*.sav
 
 

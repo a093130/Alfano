@@ -17,13 +17,9 @@ Created on Sat Apr 28 11:11:52 2018
     Wiesel and Alfano, "Optimal Many-Revolution Orbit Transfer" and is mainly
     implemented in module AlfanoLib.py.
 
-    The control law scale factor is read from a JSON formatted file as a 2x901 array:
-        [[Ri, SFi], 
-         [Ri+1, SFi+1], 
-         ..., 
-         [Rn, SFn]]
-    where Rn is an orbit ratio from 1.00 to 10.00, and the SFn are the control
-    law a scale factors.
+    The control law scale factor is read from a JSON formatted file as a 901x1470 dictionary:
+    {Lambda_1:[SF_i, SF_i+1, ...], Lambda_2:[SF_j, SF_j+1, ...], ..., Lambda_n:[SF_m, SF_m+1, ...]}
+    where the SF are in order of orbit ratio from 1.00 to 10.00.
 
     Internal Dependencies:
         get_control_onrev() ->
@@ -35,20 +31,18 @@ Created on Sat Apr 28 11:11:52 2018
                     scale_fm_xlsx() -> 
                         get_yaw_sf()
     
-    Windows dependency:
-        scale_fm_xlsx() -> xlwings -> Excel 2007 or later
-    This library may be used without Windows and Excel.
 
-@author: Colin Helms, chelms@socal.rr.com
+@author: Colin Helms, colinhelms@outlook.com
 
 @Change Log:
-    05/11/2018, Completely rewritten to use a pre-generated table of yaw values.
-    Previous version with Chebyshev polynomial saved as AlfanoChebyshev.py.
-    05/18/2018, added test cases and adjusted signatures for GMAT call.
-    05/20/2018, changed name of input files, integration with GMAT.
-    06/01/2018, added logic for Kluever eclipse weighting, and test case.
-    03/06/2019, added costate parameter to automate variable inclinations.
-    04/08/2019, Controls.json greatly expanded for all costates.
+    04/28/2018: Initial baseline.
+    04/30/2018: Chebyshev polynomial used to generate u values, AlfanoChebyshev.py.
+    05/11/2018, Rewritten to use a pre-generated linear array of u values.
+    05/18/2018, Added test cases and adjusted signatures for GMAT call.
+    05/20/2018, Changed name of input files, integrated with GMAT.
+    06/01/2018, Added logic for Kluever eclipse weighting, and test case.
+    03/06/2019, Added costate parameter, enables variable inclinations under external control.
+    04/08/2019, Controls.json elaborated for all costates, JSON codec for dictionary of ndarray.
     04/09/2019, AOL correction in get_yaw_angle() to align maximum angle pi/2 from nodes.
 """
 
@@ -62,18 +56,6 @@ import numpy as np
 import json as js
 
 import AlfanoLib as alf
-
-PREC_ORBITR = delta_a = 0.01
-""" Precision in orbit ratio must be the same as GenerateControlTable.py """
-PREC_COSTATE = delta_l = 0.001
-""" Precision in lambda must be the same as GenerateControlTable.py """
-mu = 1
-""" Use canonical values for orbit elements.  Solve for time and velocity using mu = 1 """
-nrows = int(round(1 + (10 - 1)/delta_a, 0))
-""" Orbit Ratio varies from 1 - 10 """
-ncols = int(round((np.pi/2 - 0.1)/delta_l, 0))
-""" Lambda, l, varies from 0.1 to pi/2 """
-halfpi = np.pi/2
 
 def get_control_onrev (costate, AOL, SMA, SMA_init = 6838.1366, more = True):
     """ Function provides a wrapper to perform conversions from SMA in km
@@ -122,8 +104,6 @@ def get_control_onrev (costate, AOL, SMA, SMA_init = 6838.1366, more = True):
     else:
         raise ValueError ("Orbit ratio {0} is invalid value.".format(orbit_r))
         
-
-
 def get_control (costate, AOL, orbit_r, nmore):
     """ Function implements the Edelbaum control law.
     
@@ -180,7 +160,7 @@ def get_yaw_angle (AOL, orbit_r, costate):
     AOL = AOL*(np.pi/180)
     """ GMAT provides degrees, np.cos expects radians """
     
-    cv = CControls().get_yaw_sf(orbit_r, costate)
+    cv = get_yaw_sf(orbit_r, costate)
     
     if cv != 1 :
         sf = np.sqrt(1/cv - 1)
@@ -192,6 +172,64 @@ def get_yaw_angle (AOL, orbit_r, costate):
         theta = 0
     
     return theta
+
+_fp = None
+""" file pointer in Global scope """
+         
+def read_controlfile(ctlfil = r'..\userfunctions\python\Controls.json'):
+    """ Reads the Controls.json file.  
+    One trick is that the default value of the path to the Controls.json file 
+    is always used for GMAT.  However, for testing, the file is usually in the local
+    directory.  The global file pointer is used to indicate when the file is other than 
+    the default path.  Because YawAngles.py is called as a library from GMAT, the file
+    cannot be located using a GUI.
+    """    
+    global _fp
+    
+    try:
+        with open(ctlfil, 'r') as _fp:
+            dct = alf.load(_fp)
+                            
+    except OSError as e:
+        print("OSError reading JSON file: {0} {1}".format(e.filename, e.strerror))
+        exit
+
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        print("Exception reading JSON file: {0}\n{1}\n{2}".format(e.__doc__, lines[0], lines[-1]))
+        exit
+    
+    for l in alf.UbyRbyL:
+        """ Parameter dct is a dictionary of lists, key is a string.
+        convert to ndarray with key as float64. Loop is elaborated for debug."""
+                    
+        try:
+            U = np.array(dct[str(l)])
+            #print ('np.array(dct[str(l)]) = {0}'.format(U))
+            alf.UbyRbyL[l] = U
+            
+        except Exception as e:
+            lines = traceback.format_exc().splitlines()
+            print("Exception loading UbyRbyL dictionary: {0}\n{1}\n{2}".format(e.__doc__, lines[0], lines[-1]))
+            break        
+   
+def get_yaw_sf(orbit_r, costate) :
+    """ Function looks up control variable in JSON file based on costate. 
+    returns the denominator of the control function.
+    Changed 08Apr2019: complete table of costates is searched.
+    """
+    global _fp
+    
+    if _fp == None:
+        read_controlfile()
+        
+    costate = np.round(costate, 4)
+    r = np.round(orbit_r, 2)
+    
+    row = int(round(1 + r/alf.PREC_ORBITR, 0)) - 100
+
+    return alf.UbyRbyL[costate][row]             
+
 
 def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
     """ This function computes the shadow arc computation from Vallado,
@@ -233,136 +271,12 @@ def eclipse_weight(beta, P, RMAG):
     sharc = shadow_arc(beta, P, RMAG)
     return 1 - sharc/(2*np.pi)
 
-#def loads(*args, **kwargs):
-#    """ Overload loads to use the decoder callback. """
-#    kwargs.setdefault('object_hook', cb_json_to_ndarray)    
-#    return js.loads(*args, **kwargs)
-
-def load(*args, **kwargs):
-    """ Overload load to use the decoder callback. """
-    kwargs.setdefault('object_hook', cb_json_to_ndarray)
-    
-    return js.load(*args, **kwargs)
-
-def cb_json_to_ndarray(dct):
-    """ Callback to decode a JSON encoded numpy ndarray.
-    The shape and dtype is stored in the dictionary returned from NumpyDecoder
-    Returns ndarray.
-    
-    base64.b64decode credit to Adam Hughes, and hpaulj on Stack Overflow,
-    https://stackoverflow.com/questions/27909658/
-    json-encoder-and-decoder-for-complex-numpy-arrays/27948073#27948073
-    Status: not working, as a workaround, Controls.json stores a python list 
-    rather than ndarray.
-
-    Parameters:
-        dct: (dict) json encoded ndarray
-    """
-#    if isinstance(dct, dict) and '__ndarray__' in dct:
-#        data = base64.b64decode(dct['__ndarray__'])        
-#        return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
-#        return np.frombuffer(data, dtype=dct['dtype']).reshape(dct['shape'])
-    
-    if (dct, dict):
-        
-        return(dct)
-
-class BadStructure(Exception):
-    def __init__(self, message):
-        self.message = message
-        self.__doc__ = "Shape mismatch between structures."
 
 class BadCostate(Exception):
     def __init__(self, message):
         self.message = message
         self.__doc__ = "Bad Costate"
-
-class CControls():
-    """ This class is designed as a Singleton instance.  Manage the JSON file of controls. 
-    UbyRbyL, delta_a, delta_l, mu, nrows, ncols, halfpi are shared with GenerateControlTable.py.
-    
-    TODO: factor out all the shared datastructures and variables into a common module.
-    """
-    _instances = {}
-    
-    _fp = None
-    """ File pointer """
-    _u = np.round(0.1 * np.linspace(1, 10, ncols, endpoint=False), 4)
-    """ This is the 1470 element domain of cv from 0 - 1, excluding singularities. """
-    _a = np.round(np.linspace(1, 10, nrows), 2)
-    """ This is the 901 element domain of orbit ratio. """    
-
-    _vec_k = alf.cmp_ell_int_1st_kind(_u)
-    _vec_e = alf.cmp_ell_int_2nd_kind(_u)
-    _vec_dk = alf.derivative_cmp_ell_int_1st(_u, _vec_k, _vec_e)
-    _vec_de = alf.derivative_cmp_ell_int_2nd(_u, _vec_k, _vec_e)
-    _vec_p = alf.alfano_P(_u, _vec_k)
-    _vec_dp = alf.alfano_Pprime(_u, _vec_k, _vec_dk)
-    _vec_r = alf.alfano_R(_u, _vec_k, _vec_e)
-    _vec_dr = alf.alfano_Rprime(_u, _vec_r, _vec_e, _vec_dk, _vec_de)  
-    _vec_phi = alf.alfano_phi(_vec_r, _vec_p, _vec_dr, _vec_dp)
-
-    _lcanon = np.round(halfpi * (mu/np.sqrt(1)) * 1/_vec_phi, 4)
-    
-    _UbyRbyL = {l: np.zeros(nrows) for l in _lcanon}
   
-    def __new__(CControls, *args, **kwargs):
-        """ Make this class a Singleton """
-        if CControls not in CControls._instances:
-            CControls._instances[CControls] = super().__new__(CControls)
-            
-        return CControls._instances[CControls]
-             
-    @classmethod
-    def read_controlfile(cls, ctlfil = r'..\userfunctions\python\Controls.json'):
-        
-        try:
-            with open(ctlfil, 'r') as cls._fp:
-                dct = load(cls._fp)
-                                
-        except OSError as e:
-            print("OSError reading JSON file: {0} {1}".format(e.filename, e.strerror))
-            #exit
-    
-        except Exception as e:
-            lines = traceback.format_exc().splitlines()
-            print("Exception reading JSON file: {0}\n{1}\n{2}".format(e.__doc__, lines[0], lines[-1]))
-            #exit
-        
-        for l in cls._UbyRbyL:
-            """ Parameter dct is a dictionary of lists, key is a string.
-            convert to ndarray with key as float64. Loop is elaborated for debug."""
-                        
-            try:
-                U = np.array(dct[str(l)])
-                #print ('np.array(dct[str(l)]) = {0}'.format(U))
-                cls._UbyRbyL[l] = U
-                
-            except Exception as e:
-                lines = traceback.format_exc().splitlines()
-                print("Exception loading UbyRbyL dictionary: {0}\n{1}\n{2}".format(e.__doc__, lines[0], lines[-1]))
-                break
-            
-    @classmethod        
-    def get_yaw_sf(cls, orbit_r, costate) :
-        """ Function looks up control variable in JSON file based on costate. 
-        returns the denominator of the control function.
-        Changed 08Apr2019: complete table of costates is searched.
-        """
-        if cls._fp == None:
-            cls.read_controlfile()
-            
-        costate = np.round(costate, 4)
-        r = np.round(orbit_r, 2)
-        
-        row = int(round(1 + r/delta_a, 0)) - 100
-
-        return cls._UbyRbyL[costate][row]             
-
-read_controlfile = CControls().read_controlfile
-""" This is equivalent to a static method in C++ """        
-get_yaw_sf = CControls().get_yaw_sf
-""" This is equivalent to a static method in C++ """
     
 if __name__ == "__main__":
     """    Test cases     """

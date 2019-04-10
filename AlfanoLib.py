@@ -42,9 +42,30 @@ Change Log:
 29 Mar 2019 - corrected alfano_phi() to return phi() rather than its reciprocal.
     updated costate to account for this change. 
 """
-
 import numpy as np
+#import base64
+import json as js
+import logging
+import traceback
+
 from scipy import special
+
+PREC_ORBITR = 0.01
+""" Precision in orbit ratio must be the same as GenerateControlTable.py """
+PREC_COSTATE = 0.001
+""" Precision in lambda must be the same as GenerateControlTable.py """
+MU = 1
+""" Use canonical values for orbit elements.  Solve for time and velocity using mu = 1 """
+nrows = int(round(1 + (10 - 1)/PREC_ORBITR, 0))
+""" Orbit Ratio varies from 1 - 10 """
+ncols = int(round((np.pi/2 - 0.1)/PREC_COSTATE, 0))
+""" Lambda, l, varies from 0.1 to pi/2 """
+halfpi = np.pi/2
+
+u = np.round(0.1 * np.linspace(1, 10, ncols, endpoint=False), 4)
+""" This is the 1470 element domain of cv from 0 - 1, excluding singularities. """
+a = np.round(np.linspace(1, 10, nrows), 2)
+""" This is the 901 element domain of orbit ratio. """    
 
 def cmp_ell_int_1st_kind(u: np.ndarray) -> np.ndarray:
     """
@@ -265,6 +286,98 @@ def yaw_angle (TA, cv):
 	
 	return np.arctan(np.cos(TA)/sf)
 
+def dumps(*args, **kwargs):
+    """ Overload dumps to use NumpyEncoder. """
+    kwargs.setdefault('cls', NumpyEncoder)
+    return js.dumps(*args, **kwargs)
+
+def dump(*args, **kwargs):
+    """ Overload dump use NumpyEncoder. """
+    kwargs.setdefault('cls', NumpyEncoder)
+    return js.dump(*args, **kwargs)
+
+def loads(*args, **kwargs):
+    """ Overload loads to use the decoder callback. """
+    kwargs.setdefault('object_hook', cb_json_to_ndarray)    
+    return js.loads(*args, **kwargs)
+
+def load(*args, **kwargs):
+    """ Overload load to use the decoder callback. """
+    kwargs.setdefault('object_hook', cb_json_to_ndarray)
+    
+    return js.load(*args, **kwargs)
+
+def cb_json_to_ndarray(dct):
+    """ Callback to decode a JSON encoded numpy ndarray.
+    The shape and dtype is stored in the dictionary returned from NumpyDecoder
+    Returns ndarray.
+    
+    base64.b64decode credit to Adam Hughes, and hpaulj on Stack Overflow,
+    https://stackoverflow.com/questions/27909658/
+    json-encoder-and-decoder-for-complex-numpy-arrays/27948073#27948073
+    Status: not working, as a workaround, Controls.json stores a python list 
+    rather than ndarray.
+
+    Parameters:
+        dct: (dict) json encoded ndarray
+    """
+#    if isinstance(dct, dict) and '__ndarray__' in dct:
+#        data = base64.b64decode(dct['__ndarray__'])        
+#        return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
+#        return np.frombuffer(data, dtype=dct['dtype']).reshape(dct['shape'])
+    
+    if (dct, dict):
+        return(dct)
+
+class NumpyEncoder(js.JSONEncoder):
+    """ Encode a Numpy ndarray. """
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            """ Object is ndarray. Convert into a dict holding 
+            dtype, shape and the data, base64 encoded.
+            """
+            #data_b64 = base64.b64encode(np.ascontiguousarray(obj).data)
+            #data_b64 = io.StringIO(base64.b64encode(np.ascontiguousarray(obj).data))
+            """ Proximous fix for a bug in Adam Hughes' code """
+            
+            #return dict(__ndarray__=data_b64, dtype=str(obj.dtype), shape=obj.shape)
+            return obj.tolist()
+        
+        logging.debug("NumpyEncoder fell through for type {0}.".format(type(obj)))
+        super(NumpyEncoder, self).default(obj)
+
+    """ Thanks to https://stackoverflow.com/users/3768982/tlausch on Stack Overflow,
+    https://stackoverflow.com/questions/3488934/simplejson-and-numpy-array/24375113#24375113
+    """
+try:
+    """ Compute Global arrays """
+    K = vec_k = cmp_ell_int_1st_kind(u)
+    E = vec_e = cmp_ell_int_2nd_kind(u)
+    dK = vec_dk = derivative_cmp_ell_int_1st(u, vec_k, vec_e)
+    dE = vec_de = derivative_cmp_ell_int_2nd(u, vec_k, vec_e)
+    P = vec_p = alfano_P(u, vec_k)
+    dP = vec_dp = alfano_Pprime(u, vec_k, vec_dk)
+    R = vec_r = alfano_R(u, vec_k, vec_e)
+    dR = vec_dr = alfano_Rprime(u, vec_r, vec_e, vec_dk, vec_de)  
+    phi = vec_phi = alfano_phi(vec_r, vec_p, vec_dr, vec_dp)
+    
+    Lambda = np.round(halfpi * (MU/np.sqrt(1)) * 1/vec_phi, 4)
+    """ Canonical Lambda - all other values are multiples of this row vector. """
+    UbyRbyL = {l: np.zeros(nrows) for l in Lambda}
+    """ This dictionary is the main interface between YawAngles.py nad GenerateControlTable.py 
+    The structure of this dictionary is {lambda:array(cv)},
+    where cv is in order of orbit ratio, R.
+    
+    It is important that undefined elements of u are zero because  
+    in the steering law this means tan(u) = 0, no yaw.
+    """    
+except Exception as e:
+    lines = traceback.format_exc().splitlines()
+    
+    logging.error("Exception: %s, %s, %s\n%s\n%s", e.__class__, e.__doc__, e.__cause__, lines[0], lines[-1])
+    print("Error in AlfanoLib:{0}".format(e.__doc__))
+    exit(-1)
+
 if __name__ == "__main__":
     """
     Test case for AlfanoLib
@@ -274,19 +387,6 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import matplotlib.transforms as mtransforms
         
-    size=100
-    u = np.linspace(0.100, 0.85, size)
-    a = np.linspace(1, 10, size)
-
-    K = cmp_ell_int_1st_kind(u)
-    E = cmp_ell_int_2nd_kind(u)
-    dK = derivative_cmp_ell_int_1st(u, K, E)
-    dE = derivative_cmp_ell_int_2nd(u, K, E)
-    P = alfano_P(u, K)
-    dP = alfano_Pprime(u, K, dK)
-    R = alfano_R(u, K, E)
-    dR = alfano_Rprime(u, R, E, dK, dE)
-    phi = alfano_phi(R, P, dR, dP)
     costates = costate(phi, a)
 
     mpl.rcParams['legend.fontsize'] = 10

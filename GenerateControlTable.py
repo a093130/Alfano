@@ -63,14 +63,11 @@ Change Log:
     15 Mar 2019, New high precision algorithm, per "Simulating Alfano Trajectory ...r0.4.docx"
 """
 import os
-import sys
-import base64
 import platform
 import getpass
 import logging
 import traceback
 import numpy as np
-import json as js
 import xlsxwriter as xl
 from xlsxwriter import utility as xlut
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
@@ -79,18 +76,6 @@ import AlfanoLib as alf
 
 jfilename = 'Controls.json'
 """ This file is named following an interface convention with "YawAngles.py". """
-
-mu = 1
-""" Use canonical values for orbit elements.  Solve for time and velocity using mu = 1 """
-delta_a = 0.01
-""" Precision in orbit ratio """
-delta_l = 0.001
-""" Precision in lambda """
-
-nrows = int(round(1 + (10 - 1)/delta_a, 0))
-""" Orbit Ratio varies from 1 -10 """
-ncols = int(round((np.pi/2 - 0.1)/delta_l, 0))
-""" Lambda is a cotangent value. """
 
 def altitude(a, cv):
     """ Compute phi all at once.
@@ -109,7 +94,7 @@ def altitude(a, cv):
         """ Avoid divide by zero warning. Courtesy of Stack Overflow.       
         https://stackoverflow.com/questions/26248654/numpy-return-0-with-divide-by-zero 
         """
-        alt = delta_a * np.true_divide(r_over_p, 2*a)
+        alt = alf.PREC_ORBITR * np.true_divide(r_over_p, 2*a)
         alt[alt == np.inf] = 0
         """ alt[ alt = np.inf( alt )] = 0 means find the positions where alt is infinite  
         and set the not-finite values to 0.
@@ -120,12 +105,13 @@ def altitude(a, cv):
         
     return alt
 
-def lin_interp(l_hi, l_lo, l_canon, u_lo, u_hi):
+def lin_interp(l_hi, l_lo, lamb, u_lo, u_hi):
     """ linear interpolation returning value between u_hi and u_lo proportional to 
-    l_canon between l_hi and l_lo.
-    Reminder - may need to round.
+    lamb between l_hi and l_lo.
+    
+    Calling procedure may need to round.
     """
-    return u_lo + (u_hi - u_lo) * (l_hi - l_canon)/(l_hi - l_lo)
+    return u_lo + (u_hi - u_lo) * (l_hi - lamb)/(l_hi - l_lo)
 
 def export_controls(data: dict, jfile = ".\\{0}".format(jfilename)):
     """ Function is used to write out a JSON file containing computed Alfano 
@@ -135,7 +121,7 @@ def export_controls(data: dict, jfile = ".\\{0}".format(jfilename)):
         """ Dump data to JSON formatted text file """
         with open(jfile, 'w+') as fp:
             #js.dump(data, fp)
-            dump(data, fp)
+            alf.dump(data, fp)
             """ Use overloaded dump function.  Fix to serialize ndarray. """
             
     except OSError as e:
@@ -146,37 +132,6 @@ def export_controls(data: dict, jfile = ".\\{0}".format(jfilename)):
         logging.error("Exception writing JSON file: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
         
     logging.info("{0} trajectory data file written.".format(jfile))
-
-def dumps(*args, **kwargs):
-    """ Overload dumps to use NumpyEncoder. """
-    kwargs.setdefault('cls', NumpyEncoder)
-    return js.dumps(*args, **kwargs)
-
-def dump(*args, **kwargs):
-    """ Overload dump use NumpyEncoder. """
-    kwargs.setdefault('cls', NumpyEncoder)
-    return js.dump(*args, **kwargs)
-
-class NumpyEncoder(js.JSONEncoder):
-    """ Encode a Numpy ndarray. """
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            """ Object is ndarray. Convert into a dict holding 
-            dtype, shape and the data, base64 encoded.
-            """
-            #data_b64 = base64.b64encode(np.ascontiguousarray(obj).data)
-            #data_b64 = io.StringIO(base64.b64encode(np.ascontiguousarray(obj).data))
-            """ Proximous fix for a bug in Adam Hughes' code """
-            
-            #return dict(__ndarray__=data_b64, dtype=str(obj.dtype), shape=obj.shape)
-            return obj.tolist()
-        
-        logging.debug("NumpyEncoder fell through for type {0}.".format(type(obj)))
-        super(NumpyEncoder, self).default(obj)
-
-    """ Thanks to https://stackoverflow.com/users/3768982/tlausch on Stack Overflow,
-    https://stackoverflow.com/questions/3488934/simplejson-and-numpy-array/24375113#24375113
-    """
         
 if __name__ == "__main__":
     """ Build and export the control table for simulation and flight. """
@@ -290,69 +245,23 @@ if __name__ == "__main__":
     summarySht.write_string('B12', summary_textB12, cell_format1)
     
 
-    """ write out the costates as functions of cv and a, where i in a and j in cv """
-    """ The resultant costate table: 
-    901 rows of orbit ratio from 1.00 to 10.00 by steps of 0.01 and  
-    1471 columns of lambda from -0.100 to -1.570 by steps of 0.0001.
-    """
-    wb.define_name('cv','cv!$A$1:$BDO${0}'.format(nrows+1))
-    wb.define_name('costates','costate!$A$1:$BDO${0}'.format(nrows+1))
+    wb.define_name('cv','cv!$A$1:$BDO${0}'.format(alf.nrows+1))
+    wb.define_name('costates','costate!$A$1:$BDO${0}'.format(alf.nrows+1))
 
-    #u = np.linspace(0, 1, ncols)
-    u = np.round(0.1 * np.linspace(1, 10, ncols, endpoint=False), 4)
-    """ This is the 1470 element domain of cv from 0 - 1, excluding singularities. """
-    a = np.round(np.linspace(1, 10, nrows), 2)
-    """ This is the 901 element domain of orbit ratio. """    
-    costates = np.zeros((nrows, ncols))
+    costates = np.zeros((alf.nrows, alf.ncols))
     """ This stores the 901 x 1471 element range of lambda. """
-    
-    try:
-        """ Precompute several useful arrays and factors. """
-        halfpi = np.pi/2
-        vec_k = alf.cmp_ell_int_1st_kind(u)
-        vec_e = alf.cmp_ell_int_2nd_kind(u)
-        vec_dk = alf.derivative_cmp_ell_int_1st(u, vec_k, vec_e)
-        vec_de = alf.derivative_cmp_ell_int_2nd(u, vec_k, vec_e)
-        vec_p = alf.alfano_P(u, vec_k)
-        vec_dp = alf.alfano_Pprime(u, vec_k, vec_dk)
-        vec_r = alf.alfano_R(u, vec_k, vec_e)
-        vec_dr = alf.alfano_Rprime(u, vec_r, vec_e, vec_dk, vec_de)  
-        vec_phi = alf.alfano_phi(vec_r, vec_p, vec_dr, vec_dp)
-
-    except Exception as e:
-        lines = traceback.format_exc().splitlines()
-        
-        logging.error("Exception: %s, %s, %s\n%s\n%s", e.__class__, e.__doc__, e.__cause__, lines[0], lines[-1])
-        print("Error in AlfanoLib:{0}".format(e.__doc__))
-        
-        wb.close()
-        sys.exit(-1)
-        
-    l_canon = np.round(halfpi * (mu/np.sqrt(1)) * 1/vec_phi, 4)
-    logging.debug("Canonical costates:\n%s", repr(l_canon))
-    """Lambda is a function of Phi, which maps to the linear array of u.
-    Lambda values in the first row are canonical.  That is every other
-    row in the table is a linear combination of the first row.
-    """
-    
-    UbyRbyL = {l: np.zeros(nrows) for l in l_canon}
-    """ The structure of this dictionary is {lambda:array(cv)},
-    where cv is in order of orbit ratio, R.
-    
-    It is important that undefined elements of u are zero because  
-    in the steering law this means tan(u) = 0, no yaw.
-    """
-
+                
     costateSht.write_string('A1', 'Lambda = f(R,U)', cell_bold)
-    costateSht.write_row('B1', u, cell_bold)
-    costateSht.write_column('A2', a, cell_bold)
+    costateSht.write_row('B1', alf.u, cell_bold)
+    costateSht.write_column('A2', alf.a, cell_bold)
     
     row=0
-    for R in a:
+    mu = 1
+    for R in alf.a:
         """ R is the current orbit ratio """
         col=0
         
-        L = np.round((mu/np.sqrt(R)) * l_canon, 4)
+        L = np.round((mu/np.sqrt(R)) * alf.Lambda, 4)
         """ Compute each row of lambda as a linear combination of the first row. """
 
         costateSht.write_row(row + 1, col + 1, L)
@@ -363,7 +272,7 @@ if __name__ == "__main__":
         print(msg)
         logging.debug(msg)
         
-        for lamb in l_canon:
+        for lamb in alf.Lambda:
             """ Collect the set of u that is mapped to this costate, each element
             is an instance of u for a particular orbit ratio.  
             There are two tricks to this algorithm:
@@ -388,14 +297,14 @@ if __name__ == "__main__":
                 l_found = costates[row][found_index]
                 
                 if lamb == l_found:
-                    UbyRbyL[lamb][row] = u[found_index]
+                    alf.UbyRbyL[lamb][row] = alf.u[found_index]
                 else:
                     l_lo = costates[row][found_index]
                     l_hi = costates[row][found_index - 1]
-                    u_hi = u[found_index]
-                    u_lo = u[found_index - 1]
+                    u_hi = alf.u[found_index]
+                    u_lo = alf.u[found_index - 1]
                     
-                    UbyRbyL[lamb][row] = np.round(lin_interp(l_hi, l_lo, lamb, u_lo, u_hi), 4)
+                    alf.UbyRbyL[lamb][row] = np.round(lin_interp(l_hi, l_lo, lamb, u_lo, u_hi), 4)
             else:
                 logging.warning("Costate Table row %d stops at lambda value = %d.", row, lamb)
                 break
@@ -407,19 +316,18 @@ if __name__ == "__main__":
     logging.info("Completed Calculation of costates. Rows: %d, Columns: %d. Costate worksheet written. ", row, col)
     
     trajSht.write_string('A1', 'cv = f(R,Lambda)', cell_bold)
-    trajSht.write_row('B1', l_canon, cell_bold)
-    trajSht.write_column('A2', a, cell_bold)
+    trajSht.write_row('B1', alf.Lambda, cell_bold)
+    trajSht.write_column('A2', alf.a, cell_bold)
     
     iaSht.write_string('A1', 'di/da = f(R, U)', cell_bold)
-    iaSht.write_row('B1', l_canon, cell_bold)
-    iaSht.write_column('A2', a, cell_bold)
+    iaSht.write_row('B1', alf.Lambda, cell_bold)
+    iaSht.write_column('A2', alf.a, cell_bold)
 
-    xferSht.write_row('B1', l_canon, cell_bold)
-    xferSht.write_column('A2', a, cell_bold)
-    """ TODO: sum the inclination change from worksheet "dida" """
+    xferSht.write_row('B1', alf.Lambda, cell_bold)
+    xferSht.write_column('A2', alf.a, cell_bold)
 
     col = 0  
-    for lamb in UbyRbyL:
+    for lamb in alf.UbyRbyL:
         """ Write out the 'cv' worksheet.  This is essentially the Alfano Inverse Phi().
         The costate value and orbit ratio are the domain, u as the range. 
         This function is formed by writing out the UbyRbyL dictionary as rows and columns.
@@ -430,11 +338,11 @@ if __name__ == "__main__":
         ExportControls.py will read in then write this sheet out as a JSON file.
         """     
         
-        UforL = UbyRbyL[lamb]
+        UforL = alf.UbyRbyL[lamb]
         """ UforL an array of u. """
         
         try:
-            delta_i = altitude(a, UforL)
+            delta_i = altitude(alf.a, UforL)
             
         except Exception as e:
             lines = traceback.format_exc().splitlines()
@@ -459,10 +367,10 @@ if __name__ == "__main__":
         col += 1
 
     col = 0
-    for cv in u:
+    for cv in alf.u:
         """ Fill in altitude summation formula """
         row = 0
-        for R in a:
+        for R in alf.a:
             #xferSht.write_formula('=SUM(dida!${0}2:{0}:{1}'.format(row + 1, col + 1))
             start_cell = xlut.xl_rowcol_to_cell(2, col + 1)
             sum_cell = xlut.xl_rowcol_to_cell(row + 1, col + 1)
@@ -480,7 +388,7 @@ if __name__ == "__main__":
         
     logging.info('Selected JSON Control file is %s', jfile[0])
     
-    export_controls(UbyRbyL, jfile[0])
+    export_controls(alf.UbyRbyL, jfile[0])
 
 #    mpl.rcParams['legend.fontsize'] = 10
     
