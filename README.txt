@@ -1,1 +1,0 @@
-Version 0.2a of AlfanoLib
