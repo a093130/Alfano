@@ -260,6 +260,8 @@ if __name__ == "__main__":
     costateSht.write_row('B1', alf.u, cell_bold)
     costateSht.write_column('A2', alf.a, cell_bold)
     
+    logging.debug('Key costate values are:\n{0}'.format(alf.Lambda))
+    
     row=0
     mu = 1
     for R in alf.a:

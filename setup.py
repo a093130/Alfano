@@ -7,7 +7,7 @@ Created on Sun Apr 28 15:08:37 2019
 
 from distutils.core import setup
 setup(name='alfano',
-      version='0.3a',
+      version='0.4a',
       long_description='Libraries for trajectory solutions to Edelbaum-Alfano low-thrust orbit transfer.',
       description='Edelbaum-Alfano libraries.',
       author='Colin Helms',

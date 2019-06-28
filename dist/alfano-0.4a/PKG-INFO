@@ -1,0 +1,17 @@
+Metadata-Version: 1.1
+Name: alfano
+Version: 0.4a
+Summary: Edelbaum-Alfano libraries.
+Home-page: https://www.FreelanceRocketScience.com
+Author: Colin Helms
+Author-email: colinhelms@outlook.com
+License: EULA
+Description: Libraries for trajectory solutions to Edelbaum-Alfano low-thrust orbit transfer.
+Platform: UNKNOWN
+Classifier: Development Status :: 2 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: End Users
+Classifier: Operating System :: Microsoft :: Windows7
+Classifier: Operating System :: Linux :: POSIXProgramming Language :: Python :: 3.5
+Classifier: License :: End User License Agreement
+Classifier: Topic :: Copyright :: Copyright Freelance Rocket Science, 2019

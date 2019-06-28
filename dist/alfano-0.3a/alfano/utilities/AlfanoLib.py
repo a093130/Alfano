@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @name: AlfanoLib
-@version 0.3a
+@version 0.4a
 
 Created in Spyder Editor
 This Module contains library functions derived from 
@@ -46,7 +46,8 @@ parametrically with R.
     updated costate to account for this change.
 28 Apr 2019 - version 0.2a deployed to C:/Users/chelm/Anaconda3/Lib/site-packages
     for integration of new, complete costate table with GMAT.
-21 May 2019 - Factored out lin_interp() to AlfanoLib.  Used in YawAngles and GenerateControlTable.
+21 May 2019 - version 0.3a, factored out lin_interp() to AlfanoLib.  Used in YawAngles and GenerateControlTable.
+21 Jun 2019 - version 0.4a, fixed computational errors.
 """
 import numpy as np
 #import base64
@@ -190,8 +191,9 @@ def alfano_R(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
     #if u.any() == 0 or u.any() == 1: return float(np.NaN)
     
-    a = np.sqrt(u)
-    return (1/u)*E + (a - 1/a)*K
+    su = np.sqrt(u)
+    #Fix 18Jun2019, was 1/u*E, is 1/su*E
+    return (1/su) * E + (su - 1/su) * K
 
 def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray, dK: np.ndarray, dE: np.ndarray) -> np.ndarray:
     """
@@ -216,7 +218,8 @@ def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray, dK: np.ndarray, d
     
     a = np.sqrt(u)
     sq_u = np.square(u)
-    u_to_3halves = np.power(a, 3)
+    #Fix power function, was np.power(a, 3) is np.power(a, 3/2)
+    u_to_3halves = np.power(a, 3/2)
     return 0.5*(1/a + 1/u_to_3halves)*K - (1/sq_u)*E + (1/u)*dE - 0.5*(1/a)*dK
 
 def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> np.ndarray:
@@ -242,7 +245,7 @@ def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> 
     
     return (P*(dR/dP) - R)
 
-def costate(inv_phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
+def costate(phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     """
     This function returns an array of values of the Lagrangian multiplier as 
     costate for a given orbit ratio.  
@@ -256,7 +259,7 @@ def costate(inv_phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     Returns:
     Array of lambda values as a function of phi
     """     
-    return ((np.pi/2) * np.sqrt(mu/sma) * 1/inv_phi)
+    return ((np.pi/2) * np.sqrt(mu/sma) * 1/phi)
 
 def yaw_scalefactor (u):
 	""" Convenience function that returns the correct form of the denominator in the

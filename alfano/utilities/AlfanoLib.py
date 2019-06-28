@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @name: AlfanoLib
-@version 0.3a
+@version 0.4a
 
 Created in Spyder Editor
 This Module contains library functions derived from 
@@ -46,15 +46,21 @@ parametrically with R.
     updated costate to account for this change.
 28 Apr 2019 - version 0.2a deployed to C:/Users/chelm/Anaconda3/Lib/site-packages
     for integration of new, complete costate table with GMAT.
-21 May 2019 - Factored out lin_interp() to AlfanoLib.  Used in YawAngles and GenerateControlTable.
+21 May 2019 - version 0.3a, factored out lin_interp() to AlfanoLib.  Used in YawAngles and GenerateControlTable.
+21 Jun 2019 - version 0.4a, fixed computational errors.
 """
+import logging
+import traceback
+import platform
+import getpass
 import numpy as np
 #import base64
 import json as js
-import logging
-import traceback
-
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+#    import matplotlib.transforms as mtransforms
 from scipy import special
+from mpl_toolkits.mplot3d import Axes3D
 
 PREC_ORBITR = 0.01
 """ Precision in orbit ratio must be the same as GenerateControlTable.py """
@@ -112,7 +118,7 @@ def derivative_cmp_ell_int_1st(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> n
     """
     #if u.any() == 0 or u.any() == 1: return float(np.NaN)
     
-    sq_compl_u = np.square(u)
+    sq_compl_u = 1 - np.square(u)
     return (E - sq_compl_u * K)/(u*sq_compl_u)
 
 def derivative_cmp_ell_int_2nd(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
@@ -190,8 +196,11 @@ def alfano_R(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
     #if u.any() == 0 or u.any() == 1: return float(np.NaN)
     
-    a = np.sqrt(u)
-    return (1/u)*E + (a - 1/a)*K
+    su = np.sqrt(u)
+    #Fix 18Jun2019, was 1/u*E, is 1/su*E
+    return (1/su) * E + (su - 1/su) * K
+    #return (1/u) * E + (u - 1/u) * K
+    #after Edelbaum
 
 def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray, dK: np.ndarray, dE: np.ndarray) -> np.ndarray:
     """
@@ -214,10 +223,13 @@ def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray, dK: np.ndarray, d
     """
    # if u.any() == 0: return float(np.NaN)
     
-    a = np.sqrt(u)
-    sq_u = np.square(u)
-    u_to_3halves = np.power(a, 3)
-    return 0.5*(1/a + 1/u_to_3halves)*K - (1/sq_u)*E + (1/u)*dE - 0.5*(1/a)*dK
+    sr_u = np.sqrt(u)
+    #sq_u = np.square(u)
+    #Fix power function, was np.power(a, 3) is np.power(a, 3/2)
+    u_to_3halves = np.power(u, 3/2)
+    #return 0.5*(1/a + 1/u_to_3halves)*K - (1/sq_u)*E + (1/u)*dE - 0.5*(1/a)*dK
+    return -(1/u_to_3halves)*E + (1/sr_u)*dE + 0.5*(1/sr_u + 1/u_to_3halves)*K - (sr_u - 1/u)*dK
+    #After Edelbaum
 
 def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> np.ndarray:
     """
@@ -242,7 +254,7 @@ def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> 
     
     return (P*(dR/dP) - R)
 
-def costate(inv_phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
+def costate(phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     """
     This function returns an array of values of the Lagrangian multiplier as 
     costate for a given orbit ratio.  
@@ -256,7 +268,7 @@ def costate(inv_phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     Returns:
     Array of lambda values as a function of phi
     """     
-    return ((np.pi/2) * np.sqrt(mu/sma) * 1/inv_phi)
+    return ((np.pi/2) * np.sqrt(mu/sma) * 1/phi)
 
 def yaw_scalefactor (u):
 	""" Convenience function that returns the correct form of the denominator in the
@@ -399,11 +411,30 @@ if __name__ == "__main__":
     """
     Test case for AlfanoLib
     """    
-    import matplotlib as mpl
-    from mpl_toolkits.mplot3d import Axes3D 
-    import matplotlib.pyplot as plt
-#    import matplotlib.transforms as mtransforms
-        
+    __spec__ = None
+    """ Necessry tweak to get Spyder IPython to execute this code. 
+    See:
+    https://stackoverflow.com/questions/45720153/
+    python-multiprocessing-error-attributeerror-module-main-has-no-attribute
+    """
+    
+    logging.basicConfig(
+            filename='./AlfanoLib.log',
+            level=logging.INFO,
+            format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', datefmt='%d%B%Y_%H:%M:%S')
+
+    logging.info("!!!!!!!!!! AlfanoLib Plots Started !!!!!!!!!!")
+    
+    host_attr = platform.uname()
+    logging.info('User Id: %s\nNetwork Node: %s\nSystem: %s, %s, \nProcessor: %s', \
+                 getpass.getuser(), \
+                 host_attr.node, \
+                 host_attr.system, \
+                 host_attr.version, \
+                 host_attr.processor)
+
+    logging.info('Plotspace consists of {0} rows and {1} columns.'.format(nrows, ncols))
+      
     K = vec_k 
     E = vec_e 
     dK = vec_dk 
@@ -413,8 +444,13 @@ if __name__ == "__main__":
     R = vec_r 
     dR = vec_dr   
     phi = vec_phi 
+    
+    logging.info('Plot instance of Phi(u):\n{0}'.format(phi))
+   
     costates = costate(phi)
-
+        
+    logging.info('Plot instance of costates:\n{0}'.format(costates))
+    
     mpl.rcParams['legend.fontsize'] = 10
     
     fig, axs = plt.subplots(2,1)
@@ -560,8 +596,8 @@ if __name__ == "__main__":
     ax = Axes3D(fig3d2)
     ax.plot_wireframe(X, Y, L)
     
-    ax.set_xlabel('ctl variable')
+    ax.set_xlabel('control variable u')
     ax.set_ylabel('orbit ratio')
-    ax.set_zlabel('costates') 
+    ax.set_zlabel('lambda_i') 
     plt.show()
     plt.close()
