@@ -105,6 +105,7 @@ def get_control_onrev (costate, AOL, SMA, SMA_init = 6838.1366, more = -1):
     
     else:
         raise ValueError ("Orbit ratio {0} is invalid value.".format(orbit_r))
+
         
 def get_control (costate, AOL, orbit_r, nmore):
     """ Returns the Alfano control for each orbit increment.
@@ -147,6 +148,7 @@ def get_control (costate, AOL, orbit_r, nmore):
     
     return [np.cos(theta), np.sin(theta)]
 
+
 def get_yaw_angle (AOL, orbit_r, costate):
     """ Function implements the Edelbaum control law.  Returns the yaw angle
     in degrees.  This function is good for plots.
@@ -159,25 +161,29 @@ def get_yaw_angle (AOL, orbit_r, costate):
             orbit_r: the current orbit ratio  
     """
     
-    AOL = AOL*(np.pi/180)
+    AOL = np.radians(AOL)
     """ GMAT provides degrees, np.cos expects radians """
     
     cv = get_cv(orbit_r, costate)
     
     if cv != 1:
         sf = np.sqrt(cv/(1-cv))
-#        sf = np.sqrt(1/cv - 1)
-
-        #Not sure how this makes sense, but it is consistent with Alfano and Edelbaum.
-#        theta = np.arctan(np.cos(AOL)/sf)
+        
         theta = np.arctan(np.cos(AOL) * sf)
-        """ Make a pi/2 correction to align maximum yaw pi/2 from nodes. """
     else:
-        theta = 1.570796326
-        """ np.arctan(9999 9999 9999 9999) """
-    
+        theta = alf.halfpi * np.cos(AOL)
+        """
+        The trajectory for any given value of λ_i can be visualized as a plane parallel to the u, 
+        R axes cutting through the Φ surface at a vertical offset equal to λ_i.  
+        Starting at a λ_ivalue of -0.496 the trajectory is cutoff at the right edge,
+        where the u value approaches 1. This agrees with Alfano and Wiesel’s original figure 
+        as reprinted in Vallado Figure 6-24 [6], which shows that trajectories for λ_i< -0.5 
+        are predominately inclination change.
+        
+        """
+              
     return theta
-         
+        
 def get_cv(orbit_r, costate) :
     """ Function looks up control variable in JSON Control file based on costate. 
     returns the denominator of the control function.
@@ -196,6 +202,7 @@ def get_cv(orbit_r, costate) :
     between the values of Lambda are small in the costate dictionary (UbyRbyL),
     linear interpolation of the return value is feasible.
     """
+
     if costate > -0.1186 or costate < -1.5686:
         """ The costate should be a negative number and is the argument to a tangent. 
         A tangent has singularities at zero and pi/2 (1.57). 
@@ -218,6 +225,9 @@ def get_cv(orbit_r, costate) :
         a number between zero and -0.1186, or a number less than -1.5686.
         """                
         found_index = isfound[0][0]
+        if found_index == 0:
+            raise KeyError('The Key {0} is out of bounds for the Control Table.'.format(costate))
+            
         l_found = alf.Lambda[found_index]
         l_before = alf.Lambda[found_index - 1]
 
@@ -269,6 +279,7 @@ def read_controlfile(ctlfil = r'..\userfunctions\python\Controls.json'):
             
         except Exception as e:
             raise RuntimeError('Exception loading UbyRbyL dictionary: {0} for costate {1}.'.format(e.__doc__), l)        
+
    
 def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
     """ This function computes the shadow arc computation from Vallado,
@@ -296,6 +307,7 @@ def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
         sharc = 0
     #return np.arccos(earth_angle/np.cos(beta_rads))*P/np.pi
     return sharc
+
 
 def eclipse_weight(beta, P, RMAG):
     """ This function is after the treatment in Journal of Guidance and Control,
@@ -349,35 +361,53 @@ if __name__ == "__main__":
     
     mpl.rcParams['legend.fontsize'] = 10
     
-    fig, axs = plt.subplots(2,1)
+#    fig, axs = plt.subplots(2,1)
 
     """ Test Case 1: Plot the values of Yaw angles at extremes."""
-    angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.1186')
+#    angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
+#    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.1186')
+#    axs[0].set_xlabel('Arg of Latitude')
+#    axs[0].set_ylabel('Yaw(radians)')
+#    plot21 = axs[0].plot(AOL, angles21)
+   
+#    angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
+#    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.1186')
+#    axs[1].set_xlabel('Arg of Latitude')
+#    axs[1].set_ylabel('Yaw(radians)')
+#    plot61 = axs[1].plot(AOL, angles61)
+ 
+#    plt.tight_layout()
+#    plt.show()
+#    plt.close()
+
+    fig, axs = plt.subplots(2,1)
+
+    angles21 = get_yaw_angle (AOL, 1.1, -0.4284)
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.4284')
     axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.1186')
+    angles61 = get_yaw_angle (AOL, 6.6, -0.4284)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.4284')
     axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
- 
+    
     plt.tight_layout()
     plt.show()
     plt.close()
 
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.4284)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.4284')
+    angles21 = get_yaw_angle (AOL, 1.1, -0.55)
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.55')
     axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -0.4284)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.4284')
+    angles61 = get_yaw_angle (AOL, 6.6, -0.55)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.55')
     axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
@@ -390,13 +420,13 @@ if __name__ == "__main__":
 
     angles21 = get_yaw_angle (AOL, 1.1, -0.6214)
     axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.6214')
-    axs[0].set_xlabel('Arg of Longitude')
+    axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -0.6214)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.6214')
-    axs[1].set_xlabel('Arg of Longitude')
+    angles61 = get_yaw_angle (AOL, 6.6, -0.6214)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.6214')
+    axs[1].set_xlabel('Arg of Latitudee')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
     
@@ -406,15 +436,15 @@ if __name__ == "__main__":
     
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.9692)
+    angles21 = get_yaw_angle (AOL, 1.1, -0.9695)
     axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.9692')
-    axs[0].set_xlabel('Arg of Longitude')
+    axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -0.9692)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.9692')
-    axs[1].set_xlabel('Arg of Longitude')
+    angles61 = get_yaw_angle (AOL, 6.6, -0.9695)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.9692')
+    axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
     
@@ -422,36 +452,19 @@ if __name__ == "__main__":
     plt.show()
     plt.close()
 
-    fig, axs = plt.subplots(2,1)
-
-    angles21 = get_yaw_angle (AOL, 1.1, -1.5686)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -1.5686')
-    axs[0].set_xlabel('Arg of Longitude')
-    axs[0].set_ylabel('Yaw(radians)')
-    plot21 = axs[0].plot(AOL, angles21)
-   
-    angles61 = get_yaw_angle (AOL, 6.13, -1.5686)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -1.5686')
-    axs[1].set_xlabel('Arg of Longitude')
-    axs[1].set_ylabel('Yaw(radians)')
-    plot61 = axs[1].plot(AOL, angles61)
-    
-    plt.tight_layout()
-    plt.show()
-    plt.close()
 
     """ Test Case 2: Interpolate the costate and plot the values of Yaw angles."""
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.36)
-    axs[0].set_title('Test Case 2: Yaw Angle at R=1.1, Interpolate Costate -0.36')
-    axs[0].set_xlabel('Arg of Longitude')
+    angles21 = get_yaw_angle (AOL, 1.1, -0.38)
+    axs[0].set_title('Test Case 2: Yaw Angle at R=1.1, Interpolate Costate -0.38')
+    axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -0.36)
-    axs[1].set_title('Test Case 2: Yaw Angle at R=6.13, Interpolate Costate -0.36')
-    axs[1].set_xlabel('Arg of Longitude')
+    angles61 = get_yaw_angle (AOL, 6.6, -0.38)
+    axs[1].set_title('Test Case 2: Yaw Angle at R=6.6, Interpolate Costate -0.38')
+    axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
     

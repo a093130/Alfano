@@ -78,27 +78,44 @@ def cmp_ell_int_1st_kind(u: np.ndarray) -> np.ndarray:
     """
     K(u)
     Parameters:
-    u: an array of floating point values between 0 and 1,
+    u: an array of floating point values between 0 and 1.
+
+    Note that the library uses the elliptic parameter, m, rather than the 
+    elliptic modulus, k, where  k = sqrt(u).
 
     Returns an array for the evaluation on the complete elliptical
     integral of the first kind around each of those points.
+
+    The complete elliptical integral is an elliptic integral evaluated over the
+    range 0 - pi/2.
+
     """
     return special.ellipk(u)
+
 
 def cmp_ell_int_2nd_kind(u: np.ndarray) -> np.ndarray:
     """
     E(u)
     Parameters:
-    u: an array of floating point values between 0 and 1,
+    u: an array of floating point values between 0 and 1
+    
+    Note that the library uses the elliptic parameter, m, rather than the 
+    elliptic modulus, k, where  k = sqrt(u).
 
     Returns an array for the evaluation on the complete elliptical
     integral of the second kind around each of those points.
+    
+    The complete elliptical integral is an elliptic integral evaluated over the
+    range 0 - pi/2.
+    
     """
     return special.ellipe(u)
 
+
 def derivative_cmp_ell_int_1st(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
-    K'(u), derivative of the complete elliptic integral of the first kind.
+    K'(u), derivative of the complete elliptic integral of the first kind, checked
+    by WolframAlpha online.
     
     Parameters:
     u: an array of floating point values between 0 and 1,
@@ -112,18 +129,25 @@ def derivative_cmp_ell_int_1st(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> n
     
     The integral is evaluated using the definition of the first
     derivative from dlmf.nist.gov, equ. 19.4.1 for the derivative of K:
-        dK/du = [E - (u'**2)*K]/[u*(u'**2)]
-        where u'**2 = sqrt(u**2) = u. 
-    The complex conjugate of areal number is itself.
+        dK/dk = [E(k) - (1-k^2)*K(k)]/[k*(k'^2)]
+        =1/2 * [E(u) - (1-u)*K(u)]/[u*(1-u)]
+        where k' = sqrt(1 - k^2) and k = sqrt(u)
+ 
+
     """
     #if u.any() == 0 or u.any() == 1: return float(np.NaN)
     
-    sq_compl_u = 1 - np.square(u)
-    return (E - sq_compl_u * K)/(u*sq_compl_u)
+    compl_u = (1 - u)
+    ucompl_u = u * (1-u)
+
+    # The following is validated by WolframAlpha   
+    return 0.5 * (E - compl_u*K)/ucompl_u
+    
 
 def derivative_cmp_ell_int_2nd(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
-    E'(u), derivative of the complete elliptic integral of the second kind.
+    E'(u), derivative of the complete elliptic integral of the second kind, checked by
+    WolframAlpha online.
     
     Parameters:
     u: an array of floating point values between 0 and 1,
@@ -135,11 +159,16 @@ def derivative_cmp_ell_int_2nd(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> n
     
     The integral is evaluated using the definition of the first
     derivative from dlmf.nist.gov, equ. 19.4.2 for the derivative of E:
-        dE/du = [E - K]/u
+        dE/dk = [E(u) - K(u)]/k 
+        = 1/2 * (E(u) - K(u))/u
+        where k = sqrt(u)
+
     """
     #if u.any() == 0: return float(np.NaN)
     
-    return (E - K)/u
+    # The following is validated by WolframAlpha   
+    return 0.5 * (E - K)/u
+
     
 def alfano_P(u: np.ndarray, K: np.ndarray) -> np.ndarray:
     """
@@ -155,11 +184,11 @@ def alfano_P(u: np.ndarray, K: np.ndarray) -> np.ndarray:
     P(u) is the substitution polynomial in K from Alfano equation 10:
         P = [(1-u)**1/2]*K
     """
+    # after Alfano:
+    return np.sqrt(1 - u) * K
     
-    a = np.sqrt(1 - u)
-    return  a * K
 
-def alfano_Pprime(u: np.ndarray, K: np.ndarray, dK: np.ndarray) -> np.ndarray:
+def alfano_Pprime(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
     P'(u) appears as a factor in the Alfano Phi function.
     
@@ -172,16 +201,22 @@ def alfano_Pprime(u: np.ndarray, K: np.ndarray, dK: np.ndarray) -> np.ndarray:
 
     Returns dP(u)/du around each of points, u.
     Derivation of Pprime is the original work of the author.
-    dP = -[1/2*1/sqrt(1-u)]*K + sqrt(1-u)*dK
+    dP = -1/2*[1/sqrt(1-u)]*K + sqrt(1-u)*dK
     """
     #if u.any() == 1: return float(np.NaN)
+    usqcomp_u = u * np.sqrt(1-u)
     
-    a = np.sqrt(1 - u)
-    return (0.5/a)*K + a*dK
+    # The following is validated by WolframAlpha
+    return 0.5 * (E - K)/(usqcomp_u)
+    
+
 
 def alfano_R(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
     R(u) appears as a factor in the Alfano Phi function.
+    
+    From Eqn. 11, Alfano & Wiesel, 1985.
+    From Eqn. 29, Edelbaum et al, 1960.
     
     Parameters: 
     u: an array of floating point values between 0 and 1,
@@ -191,20 +226,31 @@ def alfano_R(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     the second kind, evaluated at u.
 
     Returns R(u) around each of points, u.
-    R(u) is the substitution polynomial in K from Alfano equation 11:
-        R = E/u + (sqrt(u) - 1/sqrt(u))*K
+
+    Transcription error due to a typo in the reprint, corrected per Vallado p. 383
+    Was:
+        R = E/u + (sqrt(u) - 1/sqrt(u))K  
+    Is:
+        R = E/sqrt(u) + [sqrt(u) - 1/sqrt(u)]K
+    
+    Using Edelbaum Eqn.
+    Is:
+        R = E/u + [u - 1/u]K
     """
     #if u.any() == 0 or u.any() == 1: return float(np.NaN)
-    
-    su = np.sqrt(u)
-    #Fix 18Jun2019, was 1/u*E, is 1/su*E
-    return (1/su) * E + (su - 1/su) * K
-    #return (1/u) * E + (u - 1/u) * K
-    #after Edelbaum
 
-def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray, dK: np.ndarray, dE: np.ndarray) -> np.ndarray:
+    #Fix 18Jun2019, was:
+    #return (1/u)*E + (su - 1/su)*K
+   
+    # after Alfano:
+    su = np.sqrt(u)
+    return (1/su) * E + (su - 1/su) * K   
+
+def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray) -> np.ndarray:
     """
     R'(u) appears as a factor in the Alfano Phi function.
+    
+    From derivation by the author.
 
     Parameters: 
     u: an array of floating point values between 0 and 1,
@@ -219,23 +265,26 @@ def alfano_Rprime(u: np.ndarray, K: np.ndarray, E: np.ndarray, dK: np.ndarray, d
     
     Returns dR(u)/du around each of the points, u.
     Derivation of Rprime is the original work of the author.
-    dR = 1/2*(1/sqrt(u) + 1/sqrt(u**3))*K - (1/u**2)*E + (1/u)*dE -1/2*(1/sqrt(u)*dK)
+    Original dR = - (1/u**2)*E + (1/u)*dE + 1/2*(1/sqrt(u) + 1/sqrt(u**3))*K -1/2*(1/sqrt(u)*dK)
+    (Error in derivative result of above transcription error in R)
+    Corrected dR = - 1/2*[1/sqrt(u**3)]*E + [(1/sqrt(u)]*dE + [1/sqrt(u) + 1/sqrt(u**3)]*K +[sqrt(u) - 1/sqrt(u)]*dK
     """
-   # if u.any() == 0: return float(np.NaN)
+    # if u.any() == 0: return float(np.NaN)
     
-    sr_u = np.sqrt(u)
+    # Fix power function, was np.power(a, 3) is np.power(a, 3/2)
     #sq_u = np.square(u)
-    #Fix power function, was np.power(a, 3) is np.power(a, 3/2)
-    u_to_3halves = np.power(u, 3/2)
-    #return 0.5*(1/a + 1/u_to_3halves)*K - (1/sq_u)*E + (1/u)*dE - 0.5*(1/a)*dK
-    return -(1/u_to_3halves)*E + (1/sr_u)*dE + 0.5*(1/sr_u + 1/u_to_3halves)*K - (sr_u - 1/u)*dK
-    #After Edelbaum
+    
+    # after Alfano:
+    u3halves = np.power(u, 3/2)
+
+    # The following is validated by WolframAlpha
+    return 0.5 * (K-E)/u3halves
+
 
 def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> np.ndarray:
     """
-    This function returns the value of phi = P(u)*dR/dP - R(u),  Eqn. 18, 
-    Alfano & Weisel, 1985
-      
+    Algorithm oer Eqn. 18, Alfano & Weisel, 1985
+          
     Note there is a singularity where dP/dR = R(u)/P(u).
     
     Parameters:
@@ -247,36 +296,42 @@ def alfano_phi(R: np.ndarray, P: np.ndarray, dR: np.ndarray, dP: np.ndarray) -> 
     dP: the first derivative of P with respect to u
     
     Returns:
-    phi evaluated around the points, u.
+    phi evaluated for an array of the points, u from 0 to 1.
     
-    Note that phi evaluates to 0 as u -> 0.1.
+    Note that arcsin(u) corresponds to the maximum yaw angle for an orbit and
+    phi is a velocity.    
     """
     
-    return (P*(dR/dP) - R)
+    return (dR/dP)*P - R
+
 
 def costate(phi: np.ndarray, sma = 6.6, mu = 1) -> np.ndarray:
     """
     This function returns an array of values of the Lagrangian multiplier as 
-    costate for a given orbit ratio.  
+    costate for a given orbit ratio.
+    
+    Algorithm from Eqn. 17, Alfano & Wiesel, 1985.
     
     Parameters:
-    inv_phi: substitution polynomial of elliptic integrals.
+    phi: substitution polynomial of elliptic integrals.
     sma: the orbit ratio in canonical units, defaults to standard GEO/LEO ratio
     mu: the canonical gravitational constant GM for the central body,
     by convenion defaults to 1 in canonical units.
     
     Returns:
-    Array of lambda values as a function of phi
-    """     
-    return ((np.pi/2) * np.sqrt(mu/sma) * 1/phi)
+    Array of lambda values as a function of phi and the characteristic velocity
+    np.sqrt(mu/sma).
+    """
+
+    return (np.pi/2) * (np.sqrt(mu/sma) * 1/phi)
+
 
 def yaw_scalefactor (u):
 	""" Convenience function that returns the correct form of the denominator in the
-		Edelbaum control law.
+	Edelbaum control law.
 		
-			sqrt[1/u - 1]
+	From Eqn. 5, Alfano & Wiesel, 1985.
 		
-    where u is the return value from alfano_cv().
 	Use canonical variables, DU*, TU*, SU*, (MU = 1), a_current as DU*.
     
     Parameters:
@@ -284,20 +339,22 @@ def yaw_scalefactor (u):
 	"""
 	return np.sqrt((1/u) - 1)
 	
-def yaw_angle (TA, cv):
-	""" Function implements the Edelbaum control law,
+def yaw_angle (AOL, cv):
+	""" Function implements the Edelbaum control law.
 	
-		yaw_angle = arctan[cos(TA)/sqrt(1/u - 1)]
+	From Eqn. 4, Alfano & Wiesel, 1985.
         
     Return value: radians from -pi/2 to pi/2
 		
 	Parameters:
-		TA: the true anomaly, or astronomical longitude for a circle orbit.
+		AOL: Argument of Longitude for a circlular orbit, equal to
+        the sum of true anomaly and the argument of perigee.
 		cv: the Alfano control variable.
 	"""
-	sf = yaw_scalefactor (cv)
+	sf = yaw_scalefactor(cv)
 	
-	return np.arctan(np.cos(TA)/sf)
+	return np.arctan(np.cos(AOL)/sf)
+
 
 def dumps(*args, **kwargs):
     """ Overload dumps to use NumpyEncoder. """
@@ -353,7 +410,7 @@ def lin_interp(l_hi, l_lo, lamb, u_lo, u_hi):
 try:
     """ Compute Global arrays - this constitutes an interface agreement with AlfanoLib"""
     u = np.round(0.1 * np.linspace(1, 10, ncols, endpoint=False), 4)
-    """ This is the 1470 element domain of cv from 0 - 1, excluding singularities. """
+    """ This is the 1470 element domain of cv from 0 - 1. """
     a = np.round(np.linspace(1, 10, nrows), 2)
     """ This is the 901 element domain of orbit ratio. """
     
@@ -362,21 +419,31 @@ try:
     vec_dk = derivative_cmp_ell_int_1st(u, vec_k, vec_e)
     vec_de = derivative_cmp_ell_int_2nd(u, vec_k, vec_e)
     vec_p = alfano_P(u, vec_k)
-    vec_dp = alfano_Pprime(u, vec_k, vec_dk)
+    vec_dp = alfano_Pprime(u, vec_k, vec_e)
     vec_r = alfano_R(u, vec_k, vec_e)
-    vec_dr = alfano_Rprime(u, vec_r, vec_e, vec_dk, vec_de)  
+    vec_dr = alfano_Rprime(u, vec_k, vec_e) 
     vec_phi = alfano_phi(vec_r, vec_p, vec_dr, vec_dp)
     
-    Lambda = np.round(halfpi * (MU/np.sqrt(1)) * 1/vec_phi, 4)
-    """ Canonical Lambda - all other values are multiples of this row vector. """
+    Lambda = np.round(halfpi * 1/vec_phi, 4)
+    """ Canonical Lambda - np.sqrt(MU/1) = 1.
+    All other values are multiples of this row vector. 
+    """
     
-    UbyRbyL = {l: np.zeros(nrows) for l in Lambda}
+    """ TODO: Augment Lambda with the costates in the first column.  These costates
+    range from -0.1186 to --1.56803.  Canonical Lambda does not include -0.1186 to -0.3245.
+    Maybe, since we have a linear interpolation, we should simple create a linear series of
+    costate values for
+    """
+    
+    UbyRbyL = {l: np.ones(nrows) for l in Lambda}
     """ This dictionary is the main interface between YawAngles.py nad GenerateControlTable.py 
     The structure of this dictionary is {lambda:array(cv)},
     where cv is in order of orbit ratio, R.
     
-    It is important that undefined elements of u are zero because  
-    in the steering law this means tan(u) = 0, no yaw.
+    Undefined elements of u are set to one. 
+    In the steering law this means tan(u) = 45deg.  
+    Values of u are cutoff at 0.9998 for values of lambda_i more negative than -0.59
+    which shortens the available inclination in the optimized trajectory.
     """
     
 except Exception as e:
@@ -434,17 +501,20 @@ if __name__ == "__main__":
                  host_attr.processor)
 
     logging.info('Plotspace consists of {0} rows and {1} columns.'.format(nrows, ncols))
-      
-    K = vec_k 
-    E = vec_e 
-    dK = vec_dk 
-    dE = vec_de 
-    P = vec_p 
-    dP = vec_dp 
-    R = vec_r 
-    dR = vec_dr   
-    phi = vec_phi 
     
+    m = np.round(0.0001 * np.linspace(1000, 9990, ncols, endpoint=False), 4)
+    """ For Plot purposes only, need to control the magnitude """
+      
+    K = cmp_ell_int_1st_kind(m)
+    E = cmp_ell_int_2nd_kind(m)
+    dK = derivative_cmp_ell_int_1st(m, K, E)
+    dE = derivative_cmp_ell_int_2nd(m, K, E)
+    P = alfano_P(m, K)
+    dP = alfano_Pprime(m, K, E)
+    R = alfano_R(m, K, E)
+    dR = alfano_Rprime(m, K, E) 
+    phi = alfano_phi(R, P, dR, dP)
+        
     logging.info('Plot instance of Phi(u):\n{0}'.format(phi))
    
     costates = costate(phi)
@@ -453,49 +523,70 @@ if __name__ == "__main__":
     
     mpl.rcParams['legend.fontsize'] = 10
     
-    fig, axs = plt.subplots(2,1)
-
-    Kplot, Eplot = axs[0].plot(u, K, 'r.', u, E, 'b.')
-    dKplot, dEplot = axs[1].plot(u, dK, 'r-', u, dE, 'b-')
-
-    fig.legend((Kplot, Eplot), ('K(u)', 'E(u)'), 'upper right')
-    fig.legend((dKplot,dEplot), ('dK(u)/du', 'dE(u)/du'), 'right')
-    plt.xlabel('u')
-    plt.title('Cmpl Elliptic Integrals')
+    fig = plt.figure(figsize=(6,6))
+    ax = plt.subplot(2, 1, 1)
+    plt.plot(u, K, 'm.')
     
+    plt.ylabel('K')
+    plt.xlabel('u')
+    plt.title('Complete Elliptic Integral - 1st Kind, parameter u=0.1 to 1.0')
+
+    fig = plt.figure(figsize=(6,6))
+    ax = plt.subplot(2, 1, 2)
+    plt.plot(u, dK, 'm.')
+
+    plt.ylabel('dK/du')
+    plt.xlabel('u')
+    plt.title('Derivative Complete Elliptic Integral - 1st Kind, parameter u=0.1 to 1.0')
+
+    fig = plt.figure(figsize=(6,6))
+    ax = plt.subplot(2, 1, 1)
+    plt.plot(u, E, 'c-')
+    
+    plt.ylabel('E')
+    plt.xlabel('u')
+    plt.title('Complete Elliptic Integral - 2nd Kind, parameter u=0.1 to 1.0')
+
+    fig = plt.figure(figsize=(6,6))
+    ax = plt.subplot(2, 1, 2)
+    plt.plot(u, dE, 'c-')
+
+    plt.ylabel('dE/du')
+    plt.xlabel('u')
+    plt.title('Derivative Complete Elliptic Integral - 2nd Kind, parameter u=0.1 to 1.0')
+
     plt.tight_layout()
     plt.show()
     plt.close()
+
+    fig = plt.figure(figsize=(6,6))
     
-    fig = plt.figure(figsize=(10,10))
-    ax = plt.subplot(2, 1, 1)
-    
+    ax = plt.subplot(2, 1, 1)    
     plt.plot(u, P, 'm.')
     
     plt.ylabel('P')
     plt.xlabel('u')
     plt.title('Function P(u), u=0.1 to 1.0')
     
-    ax = plt.subplot(2, 1, 2)
+    ax = plt.subplot(2, 1, 2)    
+    plt.plot(u, dP, 'm.')
     
-    plt.plot(u, R, 'c.')
-    
-    plt.ylabel('R')
+    plt.ylabel('dP')
     plt.xlabel('u')
-    plt.title('Function R(u), u=0.1 to 1.0')
+    plt.title('Function dP(u), u=0.1 to 1.0')
     
     plt.tight_layout()
     plt.show()
     plt.close()
 
-    fig = plt.figure(figsize=(10,10))
+    fig = plt.figure(figsize=(6,6))
     ax = plt.subplot(2, 1, 1)
 
-    plt.plot(u, dP, 'm-')
+    plt.plot(u, R, 'c-')
     
-    plt.ylabel('dP')
+    plt.ylabel('R')
     plt.xlabel('u')
-    plt.title('Function dP(u), u=0.1 to 1.0')
+    plt.title('Function R(u), u=0.1 to 1.0')
 
     ax = plt.subplot(2, 1, 2)
 
@@ -504,57 +595,29 @@ if __name__ == "__main__":
     plt.ylabel('dR')
     plt.xlabel('u')
     plt.title('Function dR(u), u=0.1 to 1.0')
-
-#    fig, axs = plt.subplots(2,1)
-
-#    Pplot, Rplot = axs[0].plot(u, P, 'm.', u, R, 'c.')
-#    dPplot, dRplot = axs[1].plot(u, dP, 'm-', u, dR, 'c-')
-
-#    fig.legend((Pplot, Rplot),('P(u)','R(u)'), 'upper right')
-#    fig.legend((dPplot, dRplot), ('dP(u)/du', 'dR(u)/du'), 'right')
-#    plt.xlabel('u')
-#    plt.title('P(u) and R(u)')
     
     plt.tight_layout()
     plt.show()
     plt.close()
 
-    fig = plt.figure(figsize=(10, 8))
-    
+    fig = plt.figure(figsize=(6,6))
+    ax = plt.subplot(2, 1, 1)
     plt.plot(u, phi, 'bo')
-    
+   
     plt.ylabel('Phi')
     plt.xlabel('u')
-    plt.title('Function Phi(u), u=0.1 to 1.0')
+    plt.title('Phi(u), u=0.1 to 1.0')
+
+    ax = plt.subplot(2, 1, 2)
+    plt.plot(u, 1/phi, 'bo')
+    
+    plt.ylabel('1/Phi')
+    plt.xlabel('u')
+    plt.title('Reciprocal Phi(u), u=0.1 to 1.0')
 
     plt.tight_layout()
     plt.show()
-    plt.close()
-
-#    fig = plt.figure(figsize=(10,10))
-#    ax = plt.subplot(2, 1, 1)
-    
-#    costates=costate(0.25, a)
-    
-#    plt.plot(u, phi, 'bo')
-#    plt.ylabel('costate')
-#    plt.xlabel('Orbit Ratio')
-#    plt.title('Costate, u=0.25, R=1-10') 
-    
-#    ax = plt.subplot(2, 1, 2)
-#    trans_offset = mtransforms.offset_copy(ax.transData, fig=fig, x=-0.5, y=-0.05, units='inches')
-    
-#    costates=costate(phi)
-    
-#    plt.plot(u, costates, 'b.')
-#    plt.ylabel('costate')
-#    plt.xlabel('control variable')
-#    plt.title('Costate, u=0-1, R=6.6')
-    
-#    plt.tight_layout()
-#    plt.show()
-#    plt.close()
-    
+    plt.close()    
    
     """ Wireframe Plot of Costate """
 
@@ -563,17 +626,22 @@ if __name__ == "__main__":
     X = np.zeros((nrows, ncols))
     Y = np.zeros((nrows, ncols))
     Yt = np.zeros((nrows, ncols))
+    l_interest_L = np.zeros((nrows, ncols))
+    l_interest_X = np.zeros((nrows, ncols))
+    l_interest_Y = np.zeros((nrows, ncols))
 
     """
     TODO: Neat trick to transpose the elements of a list from 
     https://docs.python.org/3/tutorial/datastructures.html?highlight=transpose
     zip(*X) makes an iterator that aggregates elements.  We don't use it here.
     """
-  
+    l_interest = -0.6004
     #Express the costates as functions of u and a, where i in a and j in u
-    inx=-1
+    inx = -1
+    i = -1
     for sma in a:
         iny = -1
+        j = -1
         inx = inx + 1
         for cv in u:
             iny = iny + 1
@@ -585,19 +653,28 @@ if __name__ == "__main__":
             dk = derivative_cmp_ell_int_1st(cv, k, e)
             de = derivative_cmp_ell_int_2nd(cv, k, e)
             p = alfano_P(cv, k)
-            dp = alfano_Pprime(cv, k, dk)
+            dp = alfano_Pprime(cv, k, e)
             r = alfano_R(cv, k, e)
-            dr = alfano_Rprime(cv, r, e, dk, de)
+            dr = alfano_Rprime(cv, k, e)
             f = alfano_phi(r, p, dr, dp)
             
             L[inx, iny] = costate(f, sma)
+            
+            if np.around(L[inx, iny], 4) == np.around(l_interest, 4):
+                    i = i + 1
+                    j = j + 1
+                    l_interest_X[i, j] = cv
+                    l_interest_Y[i, j] = sma
+                    l_interest_L[i, j] = costate(f, sma)
                        
     fig3d2 = plt.figure(figsize=(12, 8))
     ax = Axes3D(fig3d2)
+    
     ax.plot_wireframe(X, Y, L)
+    #ax.plot_wireframe(l_interest_X, l_interest_Y, l_interest_L, color='b')
     
     ax.set_xlabel('control variable u')
-    ax.set_ylabel('orbit ratio')
+    ax.set_ylabel('r, orbit ratio')
     ax.set_zlabel('lambda_i') 
     plt.show()
     plt.close()

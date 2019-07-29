@@ -260,7 +260,7 @@ if __name__ == "__main__":
     costateSht.write_row('B1', alf.u, cell_bold)
     costateSht.write_column('A2', alf.a, cell_bold)
     
-    logging.debug('Key costate values are:\n{0}'.format(alf.Lambda))
+    logging.info('Key costate values are:\n{0}'.format(alf.Lambda))
     
     row=0
     mu = 1
@@ -283,11 +283,12 @@ if __name__ == "__main__":
             """ Collect the set of u that is mapped to this costate, each element
             is an instance of u for a particular orbit ratio.  
             There are two tricks to this algorithm:
-            (1) Each row of costates is the first row multiplied by a factor.
-            Those values appearing in the first row are canonical. It is only
+            (1) Each row of costates is the Lambda multiplied by a factor np.sqrt(mu/R).
+            Those values appearing in the first row are therefore canonical. It is only
             necessary to search for the costate values that appear in the first row.
             (2) Costate values in rows decrease (become more negative) from left
             to right.
+            
             Lambda and costate are synonyms, Lambda refers to the solution to the 
             Lagrangian multiplier for the constraint on the boundary value problem.
             Control specialists refer to these as costates.
