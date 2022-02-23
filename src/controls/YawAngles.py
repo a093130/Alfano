@@ -55,11 +55,15 @@ Created on Sat Apr 28 11:11:52 2018
     for integration of new Controls.json with GMAT.
     05/21/2019, Renamed get_yaw_sf() to get_yaw_cv(). Added interpolation of
     input costate value.
+    02/22/2022, Issue 02222022-001 Plot costate value out of range.
 
 """
+from asyncio.windows_events import NULL
+from logging import NullHandler
 import numpy as np
 import json as js
 from alfano import AlfanoLib as alf
+from sympy import minimum
 
 _fp = None
 """ file pointer in Global scope """
@@ -239,25 +243,28 @@ def get_cv(orbit_r, costate) :
         raise KeyError('The costate value {0} is not valid.'.format(costate))
 
 
-def read_controlfile(ctlfil = r'..\userfunctions\python\Controls.json'):
-    """ Reads the Controls.json file.  
-    One trick is that the default value of the path to the Controls.json file 
-    is always used for GMAT.  However, for testing, the file is usually in the local
-    directory.  The global file pointer is used to indicate when the file is other than 
-    the default path.
+def read_controlfile(ctlfil=NULL):
+    """ 
+    Reads the Controls.json file.
+    The global file pointer is used to indicate the file has already been read.
+    AlfanoLib Issue 02212022, Bad Default Path in YawAngles modified this function to
+    remove the default file path.
     """    
     global _fp
-    
+
     try:
+        if not ctlfil:
+            raise FileNotFoundError("File path has not been set.")
+
         with open(ctlfil, 'r') as _fp:
             dct = alf.load(_fp)
                             
     except OSError as e:
-        raise OSError("Invalid JSON filepath: {0} {1}".format(e.filename, e.strerror))
-
+        raise OSError("Invalid Controls.json filepath: {0} {1}".format(e.filename, e.strerror))
+   
     except Exception as e:
-        raise  FileNotFoundError("Exception reading JSON file: {0}".format(e.__doc__))
-    
+        ("Exception reading JSON file: {0}".format(e.__doc__))
+
     for l in alf.UbyRbyL:
         """ Parameter dct is a dictionary of lists, key is a string.
         convert to ndarray with key as float64. Loop is elaborated for debug."""
@@ -322,6 +329,9 @@ if __name__ == "__main__":
     import logging
     import platform
     import getpass
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+
         
     logging.basicConfig(
             filename='./GenControls.log',
@@ -340,26 +350,36 @@ if __name__ == "__main__":
                  host_attr.processor)
     
     """ Test Case 0: initialized dictionary structure from file. Fundamental to other test cases."""
-    read_controlfile(r'.\Controls.json')
-       
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
+    # AlfanoLib Issue 02212022-001, Bad Default Path in YawAngles
+    # Was: read_controlfile(r'.\Controls.json')
+    with open('./SavedJsonPath', 'r') as fd:
+        """ SavedJsonPath filename constitutes an interface agreement with GenerateControlTable."""
+        ctlfile = fd.readline()
     
+    read_controlfile(ctlfile)
+      
     AOL = np.linspace(0, 360, 60)
     
     mpl.rcParams['legend.fontsize'] = 10
     
     fig, axs = plt.subplots(2,1)
 
-    """ Test Case 1: Plot the values of Yaw angles at extremes."""
-    angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.1186')
+    """ Test Case 1: Plot the values of yaw angles at least negative costate value."""
+    maxlambda = max(alf.Lambda)
+    angles21 = get_yaw_angle (AOL, 1.1, maxlambda)
+    # Was: angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
+    # Fix for AlfanoLib Issue 02222022-001 Out of Bound Costate.
+
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, costate {0}'.format(maxlambda))
     axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.1186')
+    angles61 = get_yaw_angle (AOL, 6.13, maxlambda)
+    # Was: angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
+    # Fix for 02222022-001 Out of Bound Costate.
+
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, costate {0}'.format(maxlambda))
     axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
@@ -424,14 +444,21 @@ if __name__ == "__main__":
 
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -1.5686)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -1.5686')
+    minlambda = min(alf.Lambda)
+    angles21 = get_yaw_angle (AOL, 1.1, minlambda)
+    # Was: angles61 = get_yaw_angle (AOL, 1.1, -1.5686)
+    # Fix for 02222022-001 Out of Bound Costate.
+      
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, costate {0}'.format(minlambda))
     axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.13, -1.5686)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -1.5686')
+    angles61 = get_yaw_angle (AOL, 6.13, minlambda)
+    # Was: angles61 = get_yaw_angle (AOL, 6.13, -1.5686)
+    # Fix for 02222022-001 Out of Bound Costate.
+   
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, costate {0}'.format(minlambda))
     axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)

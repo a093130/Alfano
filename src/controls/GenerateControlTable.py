@@ -125,7 +125,6 @@ def export_controls(data: dict, jfile = ".\\{0}".format(jfilename)):
     try:       
         """ Dump data to JSON formatted text file """
         with open(jfile, 'w+') as fp:
-            #js.dump(data, fp)
             alf.dump(data, fp)
             """ Use overloaded dump function.  Fix to serialize ndarray. """
             
@@ -140,6 +139,7 @@ def export_controls(data: dict, jfile = ".\\{0}".format(jfilename)):
         
 if __name__ == "__main__":
     """ Build and export the control table for simulation and flight. """
+    
     __spec__ = None
     """ Necessry tweak to get Spyder IPython to execute this code. 
     See:
@@ -316,8 +316,7 @@ if __name__ == "__main__":
                 
             col += 1
         row += 1
-        
-    
+         
     logging.info("Completed Calculation of costates. Rows: %d, Columns: %d. Costate worksheet written. ", row, col)
     
     trajSht.write_string('A1', 'cv = f(R,Lambda)', cell_bold)
@@ -390,30 +389,17 @@ if __name__ == "__main__":
                        'Select JSON Control File for Output.', 
                        os.getenv('USERPROFILE'),
                        filter='Text files(*.json)')
-        
+
+    # AlfanoLib Issue 02212022-001, Bad Default Path in YawAngles
+    with open('./SavedJsonPath', 'w+') as fd:
+        """ Filename 'SavedJsonPath' located in CWD constitutes an interface agreement with YawAngles.py."""
+        fd.write(jfile)
+        fd.flush()
+
     logging.info('Selected JSON Control file is %s', jfile[0])
     
     export_controls(alf.UbyRbyL, jfile[0])
 
-#    mpl.rcParams['legend.fontsize'] = 10
-    
-#    fig3d2 = plt.figure()
-#    ax = Axes3D(fig3d2)
-
-#    ax.set_xlabel('orbit ratio')
-#    ax.set_ylabel('control variable')
-#    ax.set_zlabel('costates') 
-
-#    row = 0
-#    for R in a:
-#        col = 0
-#        for cv in u:
-#            ax.plot_wireframe(R, cv, costates)
-#            col +=1
-#        row += 1
-    
-#    plt.show()
-#    plt.close()
     """
     TODO: Recreate the Alfano nomograph, figure 6-4 in Vallado. Plot the costate
     value and delta-v as function of orbit ratio and inclination change.  Requires

@@ -5,5 +5,7 @@
 *.sav
 *.tar
 *.json
+SavedJsonPath
+build/
 
 
