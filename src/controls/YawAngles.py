@@ -58,41 +58,11 @@ Created on Sat Apr 28 11:11:52 2018
 
 """
 import numpy as np
-#import scipy.special as sp
 import json as js
 from alfano import AlfanoLib as alf
 
 _fp = None
 """ file pointer in Global scope """
-
-
-def get_ecc_control (TA, only = True, more = -1):
-    """ Per Edelbaum equ. 22, change eccentricity without change to SMA or Inclination.
-    
-    Parameters:
-        The argument TA must be True Anomaly, measured from the perigee.
-        The default value eonly = True provides and eccentricity change only,
-            a Value of False will provide a combined maneuver with delta-V approximately
-            Vini * 0.649 * delta-ecc.
-        The default value more = -1 will decrease eccentricity.
-    """
-    
-    phase = np.radians(TA)
-        
-#    B = more * np.sin(phase)/abs(np.sin(phase))
-#    alpha = alf.halfpi * np.tan(phase)/abs(np.tan(phase))
-    
-    if only:
-        """ Eccentricity change only """
-#        alpha = alf.halfpi * np.sign(np.tan(0.5*phase))
-        alpha = alf.halfpi * np.sign(np.sin(phase))        
-    else:
-        """ Combined eccentricity and altitude change """
-#        alpha = np.arctan(0.5 * np.tan(phase))
-        alpha = np.arctan(np.tan(0.5*phase))
-#        alpha = np.arctan(0.5 * sp.cotdg(TA))
-   
-    return [more * np.cos(alpha), 0.0, more * np.sin(alpha)]
 
 def get_control_onrev (costate, AOL, SMA, SMA_init = 6838.1366, more = -1):
     """ Function provides a wrapper to perform conversions from SMA in km
@@ -135,7 +105,6 @@ def get_control_onrev (costate, AOL, SMA, SMA_init = 6838.1366, more = -1):
     
     else:
         raise ValueError ("Orbit ratio {0} is invalid value.".format(orbit_r))
-
         
 def get_control (costate, AOL, orbit_r, nmore):
     """ Returns the Alfano control for each orbit increment.
@@ -174,10 +143,9 @@ def get_control (costate, AOL, orbit_r, nmore):
             nmore: +/1, defines the direction of the yaw angle, 
                 defined negative for decreasing inclination.
     """
-    beta = nmore * get_yaw_angle (AOL, orbit_r, costate)
+    theta = nmore * get_yaw_angle (AOL, orbit_r, costate)
     
-    return [np.cos(beta), np.sin(beta)]
-
+    return [np.cos(theta), np.sin(theta)]
 
 def get_yaw_angle (AOL, orbit_r, costate):
     """ Function implements the Edelbaum control law.  Returns the yaw angle
@@ -191,29 +159,25 @@ def get_yaw_angle (AOL, orbit_r, costate):
             orbit_r: the current orbit ratio  
     """
     
-    AOL = np.radians(AOL)
+    AOL = AOL*(np.pi/180)
     """ GMAT provides degrees, np.cos expects radians """
     
     cv = get_cv(orbit_r, costate)
     
     if cv != 1:
         sf = np.sqrt(cv/(1-cv))
-        
-        beta = np.arctan(np.cos(AOL) * sf)
+#        sf = np.sqrt(1/cv - 1)
+
+        #Not sure how this makes sense, but it is consistent with Alfano and Edelbaum.
+#        theta = np.arctan(np.cos(AOL)/sf)
+        theta = np.arctan(np.cos(AOL) * sf)
+        """ Make a pi/2 correction to align maximum yaw pi/2 from nodes. """
     else:
-        beta = alf.halfpi * np.sign(np.cos(AOL))
-        """
-        The trajectory for any given value of λ_i can be visualized as a plane parallel to the u, 
-        R axes cutting through the Φ surface at a vertical offset equal to λ_i.  
-        Starting at a λ_ivalue of -0.496 the trajectory is cutoff at the right edge,
-        where the u value approaches 1. This agrees with Alfano and Wiesel’s original figure 
-        as reprinted in Vallado Figure 6-24 [6], which shows that trajectories for λ_i< -0.5 
-        are predominately inclination change.
-        
-        """
-              
-    return beta
-        
+        theta = 1.570796326
+        """ np.arctan(9999 9999 9999 9999) """
+    
+    return theta
+         
 def get_cv(orbit_r, costate) :
     """ Function looks up control variable in JSON Control file based on costate. 
     returns the denominator of the control function.
@@ -232,7 +196,6 @@ def get_cv(orbit_r, costate) :
     between the values of Lambda are small in the costate dictionary (UbyRbyL),
     linear interpolation of the return value is feasible.
     """
-
     if costate > -0.1186 or costate < -1.5686:
         """ The costate should be a negative number and is the argument to a tangent. 
         A tangent has singularities at zero and pi/2 (1.57). 
@@ -255,9 +218,6 @@ def get_cv(orbit_r, costate) :
         a number between zero and -0.1186, or a number less than -1.5686.
         """                
         found_index = isfound[0][0]
-        if found_index == 0:
-            raise KeyError('The Key {0} is out of bounds for the Control Table.'.format(costate))
-            
         l_found = alf.Lambda[found_index]
         l_before = alf.Lambda[found_index - 1]
 
@@ -309,7 +269,6 @@ def read_controlfile(ctlfil = r'..\userfunctions\python\Controls.json'):
             
         except Exception as e:
             raise RuntimeError('Exception loading UbyRbyL dictionary: {0} for costate {1}.'.format(e.__doc__), l)        
-
    
 def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
     """ This function computes the shadow arc computation from Vallado,
@@ -337,7 +296,6 @@ def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
         sharc = 0
     #return np.arccos(earth_angle/np.cos(beta_rads))*P/np.pi
     return sharc
-
 
 def eclipse_weight(beta, P, RMAG):
     """ This function is after the treatment in Journal of Guidance and Control,
@@ -391,53 +349,35 @@ if __name__ == "__main__":
     
     mpl.rcParams['legend.fontsize'] = 10
     
-#    fig, axs = plt.subplots(2,1)
-
-    """ Test Case 1: Plot the values of Yaw angles at extremes."""
-#    angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
-#    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.1186')
-#    axs[0].set_xlabel('Arg of Latitude')
-#    axs[0].set_ylabel('Yaw(radians)')
-#    plot21 = axs[0].plot(AOL, angles21)
-   
-#    angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
-#    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.1186')
-#    axs[1].set_xlabel('Arg of Latitude')
-#    axs[1].set_ylabel('Yaw(radians)')
-#    plot61 = axs[1].plot(AOL, angles61)
- 
-#    plt.tight_layout()
-#    plt.show()
-#    plt.close()
-
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.4284)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.4284')
+    """ Test Case 1: Plot the values of Yaw angles at extremes."""
+    angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.1186')
     axs[0].set_xlabel('Arg of Latitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.6, -0.4284)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.4284')
+    angles61 = get_yaw_angle (AOL, 6.13, -0.1186)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.1186')
     axs[1].set_xlabel('Arg of Latitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
-    
+ 
     plt.tight_layout()
     plt.show()
     plt.close()
 
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.55)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.55')
+    angles21 = get_yaw_angle (AOL, 1.1, -0.4284)
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.4284')
     axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.6, -0.55)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.55')
+    angles61 = get_yaw_angle (AOL, 6.13, -0.4284)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.4284')
     axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
@@ -450,13 +390,13 @@ if __name__ == "__main__":
 
     angles21 = get_yaw_angle (AOL, 1.1, -0.6214)
     axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.6214')
-    axs[0].set_xlabel('Arg of Latitude')
+    axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.6, -0.6214)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.6214')
-    axs[1].set_xlabel('Arg of Latitudee')
+    angles61 = get_yaw_angle (AOL, 6.13, -0.6214)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.6214')
+    axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
     
@@ -466,15 +406,15 @@ if __name__ == "__main__":
     
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.9695)
+    angles21 = get_yaw_angle (AOL, 1.1, -0.9692)
     axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -0.9692')
-    axs[0].set_xlabel('Arg of Latitude')
+    axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.6, -0.9695)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Costate -0.9692')
-    axs[1].set_xlabel('Arg of Latitude')
+    angles61 = get_yaw_angle (AOL, 6.13, -0.9692)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -0.9692')
+    axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
     
@@ -482,19 +422,17 @@ if __name__ == "__main__":
     plt.show()
     plt.close()
 
-
-    """ Interpolate the costate and plot the values of Yaw angles."""
     fig, axs = plt.subplots(2,1)
 
-    angles21 = get_yaw_angle (AOL, 1.1, -0.38)
-    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Interpolate Costate -0.38')
-    axs[0].set_xlabel('Arg of Latitude')
+    angles21 = get_yaw_angle (AOL, 1.1, -1.5686)
+    axs[0].set_title('Test Case 1: Yaw Angle at R=1.1, Costate -1.5686')
+    axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
     plot21 = axs[0].plot(AOL, angles21)
    
-    angles61 = get_yaw_angle (AOL, 6.6, -0.38)
-    axs[1].set_title('Test Case 1: Yaw Angle at R=6.6, Interpolate Costate -0.38')
-    axs[1].set_xlabel('Arg of Latitude')
+    angles61 = get_yaw_angle (AOL, 6.13, -1.5686)
+    axs[1].set_title('Test Case 1: Yaw Angle at R=6.13, Costate -1.5686')
+    axs[1].set_xlabel('Arg of Longitude')
     axs[1].set_ylabel('Yaw(radians)')
     plot61 = axs[1].plot(AOL, angles61)
     
@@ -502,79 +440,27 @@ if __name__ == "__main__":
     plt.show()
     plt.close()
 
- 
-    """ All Inclination Change """
+    """ Test Case 2: Interpolate the costate and plot the values of Yaw angles."""
     fig, axs = plt.subplots(2,1)
-    
-    inc_thrust_plus = get_yaw_angle(AOL, 6.09, -0.6345)
-    axs[0].set_title('Inclination Control - 6.09 with costate -0.6345')
-    axs[0].set_xlabel('Argument of Latitude')
+
+    angles21 = get_yaw_angle (AOL, 1.1, -0.36)
+    axs[0].set_title('Test Case 2: Yaw Angle at R=1.1, Interpolate Costate -0.36')
+    axs[0].set_xlabel('Arg of Longitude')
     axs[0].set_ylabel('Yaw(radians)')
-    plotplus = axs[0].plot(AOL, inc_thrust_plus)
-    
-    inc_thrust_comb = get_yaw_angle(AOL, 6.11, -0.6345)
-    axs[1].set_title('Inclination Control - 6.11 with costate -0.6345')
-    axs[1].set_xlabel('Argument of Latitude')
-    axs[1].set_ylabel('Yaw(radians)')
-    plotplus = axs[1].plot(AOL, inc_thrust_comb)
-    
-    plt.tight_layout()
-    plt.show()
-    plt.close()
-    
-    """ Test Case 2: Eccentricity Change """
-    TA = AOL
-    fig, axs = plt.subplots(2,1)
-    
-    ecc_thrust_plus = get_ecc_control(TA)
-    axs[0].set_title('Test Case 2: ECC Control - ECC only')
-    axs[0].set_xlabel('True Anomaly')
-    axs[0].set_ylabel('Pitch(radians)')
-    plotplus = axs[0].plot(AOL, ecc_thrust_plus[2])
-    
-    ecc_thrust_minus = get_ecc_control(TA, False)
-    axs[1].set_title('Test Case 2: ECC Control - Combined')
-    axs[1].set_xlabel('True Anomaly')
-    axs[1].set_ylabel('Pitch(radians)')
-    plotplus = axs[1].plot(AOL, ecc_thrust_minus[2])
-    
-    plt.tight_layout()
-    plt.show()
-    plt.close()
-    
-
-    """ Test Case 3: shadow_arc() and eclipse_weight() """
-    betas = np.linspace(-60, 60, 60)
-    sharc = np.zeros(60)
-    weights = np.ones(60)
-    
-    P = 18000
-    RMAG = 15000
-    
-    for n in range(0,60):
-        beta = betas[n]
-        sharc[n] =   shadow_arc(beta, P, RMAG,)
-        weights[n] = eclipse_weight(beta, P, RMAG,)
-        
-    fig, axs = plt.subplots(2,1)
-
-    """ Plot the values of Kleuver Weights. """
-    axs[0].set_title('Shadow Angles at 15000km')
-    axs[0].set_xlabel('Beta')
-    axs[0].set_ylabel('Shadow Arc')
-    plot21 = axs[0].plot(betas, sharc)
+    plot21 = axs[0].plot(AOL, angles21)
    
-    axs[1].set_title('Kleuver Weights at 15000km')
-    axs[1].set_xlabel('Beta')
-    axs[1].set_ylabel('Weights')
-    plot61 = axs[1].plot(betas, weights)
+    angles61 = get_yaw_angle (AOL, 6.13, -0.36)
+    axs[1].set_title('Test Case 2: Yaw Angle at R=6.13, Interpolate Costate -0.36')
+    axs[1].set_xlabel('Arg of Longitude')
+    axs[1].set_ylabel('Yaw(radians)')
+    plot61 = axs[1].plot(AOL, angles61)
     
     plt.tight_layout()
     plt.show()
     plt.close()
-      
+    
 
-    """ Test Case 4: Thrust Components per Revolution.  
+    """ Test Case 3: Thrust Components per Revolution.  
     This test case uses a logic similar to that incorporated in the 
     GMAT AlfanoXfer script.  
     Reference "Simulating Alfano Trajectory with GMAT", author's report.
@@ -608,7 +494,7 @@ if __name__ == "__main__":
     Thrust=[0, 1.0, 0]
         
     with open('thrustlog.log', 'w+') as log:
-        log.write('Test Case 4, Thrust.\n')
+        log.write('Test Case 3.\n')
         log.write('Using costate = {0}.\n'.format(-0.4284))
         log.write('Columns are: \nAOL, Tangental, Yaw, Pitch\n')
         
@@ -624,9 +510,38 @@ if __name__ == "__main__":
                 js.dump(Thrust, log)
                 log.write('\n')
     
-    print('See file "thrustlog.log" for results of Test Case 4.')
+    print('See file "thrustlog.log" for results of Test Case 3.')
     
-  
+    """ Test Case 4: shadow_arc() and eclipse_weight() """
+    betas = np.linspace(-60, 60, 60)
+    sharc = np.zeros(60)
+    weights = np.ones(60)
+    
+    P = 18000
+    RMAG = 15000
+    
+    for n in range(0,60):
+        beta = betas[n]
+        sharc[n] =   shadow_arc(beta, P, RMAG,)
+        weights[n] = eclipse_weight(beta, P, RMAG,)
+        
+    fig, axs = plt.subplots(2,1)
+
+    """ Test Case 1: Plot the values of Yaw angles useJSON = True """
+    axs[0].set_title('Shadow Angles at 15000km')
+    axs[0].set_xlabel('Beta')
+    axs[0].set_ylabel('Shadow Arc')
+    plot21 = axs[0].plot(betas, sharc)
+   
+    axs[1].set_title('Kleuver Weights at 15000km')
+    axs[1].set_xlabel('Beta')
+    axs[1].set_ylabel('Weights')
+    plot61 = axs[1].plot(betas, weights)
+    
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+    
         
 
  
