@@ -1,38 +1,47 @@
 # -*- coding: utf-8 -*-
 """
 @name: AlfanoLib
-@version 0.4a
+@version 0.4a1
 
-Created in Spyder Editor
-This Module contains library functions derived from 
-"Optimal Many-revolution Orbit Transfer," Alfano & Wiesel 1985.
+@description: 
+    This Module contains library functions to compute the controls
+    for a low-thrust circle to circle orbit transfer as derived from 
+    "Optimal Many-revolution Orbit Transfer," Alfano & Wiesel 1985.
+    Note that Vallado, "Fundamentals of Astrodynamics," Section 6.7,
+    is derived from Alfano & Wiesel.
 
-@description: The following functions are incorporated in this library.
-    cmp_ell_int_1st_kind is the complete elliptical integral of the first kind, K(u).
-    cmp_ell_int_2nd_kind is the complete elliptical integral of the second kind, E(u).
-    derivative_cmp_ell_int_1st is the derivative of K(u) wrt u.
-    derivative_cmp_ell_int_2nd is the derivative of E(u) wrt u.
-    alfano_P, is a substitution, P(u), containing terms of K(u).
-    alfano_Pprime, the derivative of P(u) wrt u.
-    alfano_R, is a substitution, R(u), containing terms of E(u) and K(u).
-    alfano_Rprime, the derivative of R(u) wrt u.
-    Note that Alfano & Wiesel is incorporate in Vallado, "Fundamentals of
-        Astrodynamics," Section 6.7, where cv := u.
-    The costate for Semi-Major Axis (SMA) is solved in terms of the costate for inclination resulting 
-        in phi, a function of elliptic integrals and their derivatives.
-    The costate for inclination is constant and its solution is optimal.
-    The inverse of phi() is used to select the optimum value for the
-        control variable, u. The optimal costate must be known.
-    Given the current SMA and inclination, the u value solves the Edelbaum 
-        control law for the many-revolution combined maneuver in inclination and  
-        orbit raising.
+    The following functions are incorporated in this library.
+    -cmp_ell_int_1st_kind is the complete elliptical integral of the first kind, K(u).
+    -cmp_ell_int_2nd_kind is the complete elliptical integral of the second kind, E(u).
+    -derivative_cmp_ell_int_1st is the derivative of K(u) wrt u.
+    -derivative_cmp_ell_int_2nd is the derivative of E(u) wrt u.
+    -alfano_P, is a substitution, P(u), containing terms of K(u).
+    -alfano_Pprime, the derivative of P(u) wrt u.
+    -alfano_R, is a substitution, R(u), containing terms of E(u) and K(u).
+    -alfano_Rprime, the derivative of R(u) wrt u.
 
-If this module is executed as a script, the values of the above are computed
-for a linear distribution of u, and figures containing plots are generated
-for documentation.  
+    The algorithms for solution of the derivative of the elliptic functions are
+    taken from the NIST Digital Library of Mathematical Functions. <https://dlmf.nist.gov/>
+    
+    If this module is executed standalone, the library functions are computed
+    for a linear distribution of lambda and orbit ratio, and plots are generated
+    for verification. 
 
-The costate uses the orbit ratio as a parameter, this functions is plotted
-parametrically with R. 
+@copyright Freelance Rocket Science, 2022
+
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 @author: Colin Helms
 

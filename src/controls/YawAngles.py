@@ -2,22 +2,24 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Apr 28 11:11:52 2018
-@Version 0.3a
 
-@Description:
+@version 0.5a1
+
+@description:
     This module performs a lookup on a precomputed table of control law scale factors 
     by orbit ratio.  It is designed to be called from within a GMAT mission sequence.
 
     The result of the lookup is multiplied by the cosine of the Argument of Latitude and the 
     yaw angle is returned in degrees.
     
-    Yaw is defined here as as an angle normal to the orbital plane.
-    This can be confusing as some older authors define this angle as pitch, following the
-    convention of aircraft wherein pitch is normal to the horizon.
+    Yaw is defined here as as an angle normal to the orbital plane in the 
+    Velocity-Normal-Binormal satellite coordinate system.
+    This can be confusing as aircraft define yaw as heading and pitch normal
+     to the horizon.
 
     The computation of the yaw control angle is based on Edelbaum's control law, see
     Wiesel and Alfano, "Optimal Many-Revolution Orbit Transfer" and is implemented 
-    in package Alfano.AlfanoLib.py.
+    in package alfano by AlfanoLib.py.
 
     The argment to the control law, the control variable, is read from a 901x1471 dictionary
     formatted as a JSON file:
@@ -41,6 +43,20 @@ Created on Sat Apr 28 11:11:52 2018
 
 @copyright Copyright Freelance Rocket Science, 2018, 2019
 
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
+
 @change log:
     04/28/2018: Initial baseline.
     04/30/2018: AlfanoChebyshev.py used to generate u values.
@@ -50,20 +66,20 @@ Created on Sat Apr 28 11:11:52 2018
     06/01/2018, Added logic for Kluever eclipse weighting, and test case.
     03/06/2019, Added costate parameter, enables variable inclinations under external control.
     04/08/2019, Controls.json elaborated for all costates. 
-    04/10/2019, Added JSON codec for dictionary of ndarray.
+    04/10/2019, Added JSON codec to output dictionary of ndarray.
     04/28/2019, Deployed version 0.2a to C:/Users/chelm/Anaconda3/Lib/site-packages
     for integration of new Controls.json with GMAT.
-    05/21/2019, Renamed get_yaw_sf() to get_yaw_cv(). Added interpolation of
-    input costate value.
-    02/22/2022, Issue 02222022-001 Plot costate value out of range.
-
+    05/21/2019, get_yaw_sf() renamed get_yaw_cv(). Added interpolation of costate value.
+    02/22/2022, Fixed Issue 02212022-001. Use shared file containing path for Controls.json.
+    02/22/2022, Fixed Issue 02222022-001. Test case 3 costate limits are now max/min of alf.lambda.
 """
 from asyncio.windows_events import NULL
 from logging import NullHandler
+
 import numpy as np
 import json as js
+from pathlib import Path
 from alfano import AlfanoLib as alf
-from sympy import minimum
 
 _fp = None
 """ file pointer in Global scope """
@@ -243,24 +259,38 @@ def get_cv(orbit_r, costate) :
         raise KeyError('The costate value {0} is not valid.'.format(costate))
 
 
-def read_controlfile(ctlfil=NULL):
+def read_controlfile(ctlfile=None):
     """ 
-    Reads the Controls.json file.
-    The global file pointer is used to indicate the file has already been read.
-    AlfanoLib Issue 02212022, Bad Default Path in YawAngles modified this function to
-    remove the default file path.
+    Reads the Controls.json file and initializes the AlfanoLib UbyRbyL global dictionary.
+    The _fp global file pointer is used as a singleton to indicate whether the Control File
+    has been read and UbyRbyL initialized.  This is only done once per YawAngles instance.
+
+    Fix for AlfanoLib Issue 02212022-001, Bad Default Path in YawAngles. Remove the 
+    default file path.
     """    
     global _fp
 
-    try:
-        if not ctlfil:
-            raise FileNotFoundError("File path has not been set.")
+    # Begin Issue 02212022-001 Fix
+    sharedfname = Path.cwd() / Path('SavedJsonPath')
+    """ SavedJsonPath filename constitutes an interface agreement with GenerateControlTable."""
 
-        with open(ctlfil, 'r') as _fp:
-            dct = alf.load(_fp)
+    try:
+        with open(sharedfname, 'r') as fd:
+            ctlfile = fd.readline()
+               
+    except OSError as e:
+        print('SaveJsonPath could not be opened for writing {0}.'.format(ctlfile))
+   # End Issue 02212022-001 Fix
+
+    try:
+        if not ctlfile:
+            raise FileNotFoundError("Control file path has not been set from SavedJsonPath.")
+        else:
+            with open(ctlfile, 'r') as _fp:
+                dct = alf.load(_fp)
                             
     except OSError as e:
-        raise OSError("Invalid Controls.json filepath: {0} {1}".format(e.filename, e.strerror))
+        raise OSError("Invalid Controls.json filepath: {0} {1}".format(ctlfile, sharedfname))
    
     except Exception as e:
         ("Exception reading JSON file: {0}".format(e.__doc__))
@@ -278,8 +308,9 @@ def read_controlfile(ctlfil=NULL):
             raise RuntimeError('Exception loading UbyRbyL dictionary: {0} for costate {1}.'.format(e.__doc__), l)        
    
 def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
-    """ This function computes the shadow arc computation from Vallado,
-    p.305.  Vallado uses a cylindrical shadow model.
+    """ 
+    This function implements the shadow arc computation from Vallado p.305.
+    Vallado uses a cylindrical shadow model.
     
     Parameters: 
         beta, the beta angle from Earth to the sun for any season.
@@ -305,8 +336,9 @@ def shadow_arc(beta, P, RMAG, MU = 1, RINIT = 6378.136):
     return sharc
 
 def eclipse_weight(beta, P, RMAG):
-    """ This function is after the treatment in Journal of Guidance and Control,
-    Vol 34, No 1, p.300, Kluever.
+    """ 
+    This function is after the treatment by Kluever et al documented 
+    in Journal of Guidance and Control, Vol 34, No 1, p.300.
     Function computes the time in shadow from sun Beta angle, RMAG, Period and the 
     radius of the Earth.
     Parameters:
@@ -317,21 +349,18 @@ def eclipse_weight(beta, P, RMAG):
     sharc = shadow_arc(beta, P, RMAG)
     return 1 - sharc/(2*np.pi)
 
-
 class BadCostate(Exception):
     def __init__(self, message):
         self.message = message
         self.__doc__ = "Bad Costate"
   
-    
+""" *****Test cases***** """  
 if __name__ == "__main__":
-    """    Test cases     """
     import logging
     import platform
     import getpass
     import matplotlib as mpl
     import matplotlib.pyplot as plt
-
         
     logging.basicConfig(
             filename='./GenControls.log',
@@ -349,23 +378,15 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
     
-    """ Test Case 0: initialized dictionary structure from file. Fundamental to other test cases."""
-    # AlfanoLib Issue 02212022-001, Bad Default Path in YawAngles
-    # Was: read_controlfile(r'.\Controls.json')
-    with open('./SavedJsonPath', 'r') as fd:
-        """ SavedJsonPath filename constitutes an interface agreement with GenerateControlTable."""
-        ctlfile = fd.readline()
-    
-    read_controlfile(ctlfile)
-      
-    AOL = np.linspace(0, 360, 60)
-    
+    AOL = np.linspace(0, 360, 61) # Initialize Argument Of Latitude (AOL).
     mpl.rcParams['legend.fontsize'] = 10
-    
     fig, axs = plt.subplots(2,1)
 
+    """ Test Case 0: Initialize dictionary from Controls.json file."""
+    read_controlfile() # Initializes alf.UbyRbyL dictionary.
+
     """ Test Case 1: Plot the values of yaw angles at least negative costate value."""
-    maxlambda = max(alf.Lambda)
+    maxlambda = max(alf.Lambda) # Don't get confused, Lambda values are negative numbers.
     angles21 = get_yaw_angle (AOL, 1.1, maxlambda)
     # Was: angles21 = get_yaw_angle (AOL, 1.1, -0.1186)
     # Fix for AlfanoLib Issue 02222022-001 Out of Bound Costate.
@@ -486,66 +507,50 @@ if __name__ == "__main__":
     plt.show()
     plt.close()
     
+    """ Test Case 3: Simulate GMAT call, Log thrust Components."""
+    SMA_init = 6838.1366    
+    SMA = np.linspace(6938, 41938, 10) # Semi-Major Axis
+    MU = 1                  # canonical gravitational constant 
+    DU = 6378.1366          # canonical dsistance unit - Earth radius
+    TU = 806.81112382429    # canonical time unit - Solar second
 
-    """ Test Case 3: Thrust Components per Revolution.  
-    This test case uses a logic similar to that incorporated in the 
-    GMAT AlfanoXfer script.  
-    Reference "Simulating Alfano Trajectory with GMAT", author's report.
-    
-    State:
-        AOL = np.linspace(0, 360, 60)
-        AOL_init = 99.88774933204886
-        Thrust_init = [1,0,0]
-        SMA, variable
-        SMA_init = 6838.1366
-    """
-    
-    SMA_init = 6838.1366
+    DUstar = SMA_init/DU    # non-dimensional DU 1.072121
+    TUstar = TU * np.sqrt(np.power(DUstar,3)/MU) # canonical TU
 
-    """ canonical gravitational constant """
-    MU = 1
-    """canonical dsistance unit - Earth radius"""
-    DU = 6378.1366
-    """ canonical time unit - Solar second"""
-    TU = 806.81112382429
-    """ non-dimensional DU 1.072121"""
-    DUstar = SMA_init/DU
-    """canonical TU"""
-    TUstar = TU * np.sqrt(np.power(DUstar,3)/MU)
-    """Orbit Ratio """
-    
-    R_init = 1
+    R_init = 1              # Orbit Ratio
     R_final = 10
-    AOL_init = 0
-    
-    Thrust=[0, 1.0, 0]
+    AOL_init = 0            # Argument of Latitude
+
+    costates = -0.01*np.linspace(45, 59, 15)         # Alfano lambda
+
+    thrustv = [0, 1.0, 0]   # thrust vector, initialized
         
     with open('thrustlog.log', 'w+') as log:
-        log.write('Test Case 3.\n')
-        log.write('Using costate = {0}.\n'.format(-0.4284))
-        log.write('Columns are: \nAOL, Tangental, Yaw, Pitch\n')
+        log.write('Test Case 3, call simulates GMAT use.\n')
+        log.write('Orbit Ratios from 1 to 10\n')
+        log.write('With lambda = {0} to {1}.\n'.format(costates[0],costates[14]))
+        log.write('By Argument of Longitude\n')
+        log.write('Columns are velocity, normal, and binormal components of thrust angle.\n')
         
-        for R in range(R_init, R_final, 1):
-            SMA = R * SMA_init
-            log.write('\nOrbit SMA: {0}\n'.format(SMA))
-                
-            
-            for theta in AOL:                
-                Thrust = get_control_onrev(-0.4284, theta, SMA)
-                
-                log.write('AOL = {0}, Thrust angles: '.format(theta))
-                js.dump(Thrust, log)
-                log.write('\n')
-    
+        for lamb in costates:
+            for d in SMA: 
+                for long in AOL:                
+                    thrustv = get_control_onrev(lamb, long, d, 6838, -1)
+                    log.write('\nCostate: {0:.2g}, '.format(lamb))
+                    log.write('SMA: {0:.6g}, '.format(d))
+                    log.write('AOL: {0:.6g}, '.format(long))
+                    log.write('velocity: {0:.2g}, normal: {1:.2g}, binormal: {2:.2g}'\
+                        .format(thrustv[0], thrustv[1], thrustv[2]))                 
+        
     print('See file "thrustlog.log" for results of Test Case 3.')
     
     """ Test Case 4: shadow_arc() and eclipse_weight() """
-    betas = np.linspace(-60, 60, 60)
-    sharc = np.zeros(60)
-    weights = np.ones(60)
+    betas = np.linspace(-60, 60, 61)
+    sharc = np.zeros(61)
+    weights = np.ones(61)
     
-    P = 18000
     RMAG = 15000
+    P = 18000 # 2*pi*sqrt(RMAG^3/mu)
     
     for n in range(0,60):
         beta = betas[n]
@@ -554,7 +559,6 @@ if __name__ == "__main__":
         
     fig, axs = plt.subplots(2,1)
 
-    """ Test Case 1: Plot the values of Yaw angles useJSON = True """
     axs[0].set_title('Shadow Angles at 15000km')
     axs[0].set_xlabel('Beta')
     axs[0].set_ylabel('Shadow Arc')

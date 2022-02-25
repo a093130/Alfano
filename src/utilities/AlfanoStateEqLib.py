@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created in Spyder Editor
-@description: This Module contains library functions taken from 
+@version 0.2a1
+
+@description This Module contains library functions taken from 
 "Optimal Many-revolution Orbit Transfer,\" Alfano & Wiesel 1985.
 
 Functions:
@@ -13,11 +14,25 @@ this script plots its two functions as a function of u.
 
 @author: Colin Helms
 
-@copyright Copyright Freelance Rocket Science, 2019
+@copyright Freelance Rocket Science, 2022
 
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
+    
 @change log:
     02/23/2018, baseline
-    04/29/2019, updated to use AlfanoLib distribution
+    04/29/2019, deprecated
 """
 import numpy as np
 from alfano.utilities.AlfanoLib import cmp_ell_int_1st_kind

@@ -5,7 +5,9 @@
 *.sav
 *.tar
 *.json
-SavedJsonPath
 build/
-
+dist/
+*-workspace
+~*
+SavedJsonPath
 

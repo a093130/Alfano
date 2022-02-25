@@ -2,23 +2,35 @@
 """
 Created on Sat Apr 28 11:11:52 2018
 
-Description: this module computes the control variable for an orbit transfer
-with combinted inclination and altitude change.
+@version 0.2a1
+
+@description This module computes the control variable for an orbit transfer
+with combined inclination and altitude change.
 The algorithm is the Chebychev polynomial approximation from Appendix A of 
 Wiesel and Alfano, "Optimal Many-Revolution Orbit Transfer".
 Also see equation 6-55, Vallado "Fundamentals of Astrodynamcs", 4th ed.
 
-Note that Alfano uses a non-conventional definition of pitch, roll and yaw, which, although
-consistent with cited works by Edelbaum, is not consistent with astrodynamics practice.
-The control law provides a yaw angle for thruster control, where the yaw angle is out-of-plane.
+@author: Colin Helms, colinhelms@outlook.com
 
-@author: Colin Helms
+@copyright Freelance Rocket Science, 2022
 
-Copyright Freelance Rocket Science, 2019
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 Change Log:
     05/11/2018, Correction to z_from_x(), ta = np.linspace()
-    04/29/2019, change to use Alfano distribution under Lib/site-packages
+    05/11/2019, Deprecated.
 """
 import numpy as np
 from alfano.utilities import AlfanoLib as alf

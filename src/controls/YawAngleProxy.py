@@ -2,15 +2,30 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Apr 28 11:11:52 2018
-@Version 0.2a
+@version 0.2a1
 
-@Description:
-    This module is a simple wrapper to call the library function get_control_onrev. 
+@description:
+    This module is a simple wrapper to call the library function YawAngles.
+    Theoretically this would make the GMAT/userfunctions/python module independent
+    of changes in YawAngles.
 
 @author: Colin Helms
 
 @copyright Copyright Freelance Rocket Science, 2019
 
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
 """
 from alfano import YawAngles as ctl
 

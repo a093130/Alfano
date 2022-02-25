@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+#!python
+# # -*- coding: utf-8 -*-
 """
 Created on Sun Apr 28 15:08:37 2019
 
@@ -7,22 +8,20 @@ Created on Sun Apr 28 15:08:37 2019
 
 from distutils.core import setup
 setup(name='alfano',
-      version='0.4a',
-      long_description='Libraries for trajectory solutions to Edelbaum-Alfano low-thrust orbit transfer.',
-      description='Edelbaum-Alfano libraries.',
+      version='0.5a1',
+      description='Edelbaum-Alfano Low-Thrust Trajectories.',
+      long_description='file: README.txt',
       author='Colin Helms',
       author_email='colinhelms@outlook.com',
-      url='https://www.FreelanceRocketScience.com',
-      packages=['', 'alfano', 'alfano.utilities', 'alfano.controls'],
-      package_data={'alfano.controls' : ['Controls.json']},
-      license='EULA',
+      url='https://github.com/a093130/Alfano',
+      packages=['', 'src', 'src.utilities', 'src.controls'],
       classifiers=[
-              'Development Status :: 2 - Alpha',
+              'Development Status :: Alpha',
               'Environment :: Console',
-              'Intended Audience :: End Users',
-              'Operating System :: Microsoft :: Windows7',
-              'Operating System :: Linux :: POSIX'
-              'Programming Language :: Python :: 3.5',
+              'Operating System :: Microsoft :: Windows 10',
+              'Operating System :: Linux :: Ubuntu 18.4',
+              'Programming Language :: Python :: 3.4',
               'License :: End User License Agreement',
-              'Topic :: Copyright :: Copyright Freelance Rocket Science, 2019']
-      )
+              'Topic :: Copyright :: Copyright Freelance Rocket Science, 2022'
+              ],
+        )

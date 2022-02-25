@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @Name: AlfanoLib 
-@Version: 2.0
+@Version: 0.5a1
 
 Created on Sun Apr 28 15:28:56 2019
 Deployed to <PYTHONPATH>/alfano
@@ -15,6 +15,8 @@ Deployed to <PYTHONPATH>/alfano
 """
 from __future__ import absolute_import
 import sys
+
+__all__ = ["AlfanoLib", "PropellantPlots"]
 
 if sys.version_info[:2] < (3, 4):
     m = "Python 3.4 or later is required for Alfano (%d.%d detected)."

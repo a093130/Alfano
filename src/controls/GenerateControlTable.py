@@ -1,62 +1,58 @@
+#!python
 # -*- coding: utf-8 -*-
 """
 Created on Sun May  6 18:36:48 2018
-@version 0.3a
-
-
+@version 0.5a1
 
 @description:
-Reference Wiesel and Alfano, 1983, "Optimal Many-Revolution Orbit Transfer".
-Reference Sec. 6.7, Vallado, "Fundamentals of Astrodynamics and Applications," 
-4th edition.
-
-This Module contains code to output tables that can be joined to determine
-the Alfano control variable, u (aka cv in Vallado).  It's purpose is to define 
-the thrust profile for an optimum combined inclination change and orbit raising
-maneuver.  Its file products are intended to be used with an astrodynamcs
-simulation tool such as GMAT.  The output files should be copied to the Python 
-user functions directory of GMAT.
+This Module generates a JSON file containing the values of the Alfano control variable
+by orbit ratio for any valid value of the Alfano costate. This file is used by 
+YawAngles.py to return the yaw plane thrust angle to a GMAT mission script for any
+value of orbit ratio from 1-to-10.
 
 An Excel workbook named YawAngleGenerator.xlsx is created in the current directory 
 when the module is executed. The workbook is not used further, but is provided for 
 inspection and numerical analysis.
-
-BEWARE - the program will overwrite YawAngleGenerator.xlsx in the current directory.
   
-Functions from AlfanoLib.py are used to compute the analytical values of lambda
-given linear arrays of cv and orbit ratio.  The goal is to find the value of cv 
-corresponding to the written values of lambda and orbit ratio.  This is the 
-inverse function of Phi() in Alfano. The workbook is designed to perform a "Join" 
-of the current orbit ratio, cv, and the computed lambda costate using the Excel 
-Match functions.  
+AlfanoLib.py from the alfano utilities package is used to compute the values
+of lambda given linear arrays of cv and orbit ratio.  Once this array is computed 
+the array is inverted such given a value of lambda the corresponding thrust control
+value can be returned for each value of orbit ratio.  This is the solution to the
+inverse function of Phi() in Alfano's paper.  
 
-The optimum value of the lambda costate must be input by the mission planner
-in order to obtain the feasible values for his mission. 
+The optimum value of the lambda costate must be determined by the mission planner
+in order to obtain the feasible values for his mission.  The output workbook provides
+the "dida" worksheet to assist an initial guess which gives the increment of inclination
+change per increment of orbit ratio in columns for each valid lambda value.
 
-A default value of -0.54 is written to the workbook, corresponding to a 
-transfer from 500 km to 35786 km. Graphical means of determining the optimum 
-lambda value are given in Vallado, Figure 6-24.
+Graphical means of determining the optimum lambda value are given in Vallado, 
+Figure 6-24.
 
-Given the lambda costate, and Join, the workbook generates values of the cv 
-scale factor by orbit ratio in sheet "trajectory'.  As of Version 1.00 these values 
-are generated for orbit ratios from 1-to-10 in increments of 0.01, yielding
-901 rows, written in array B2:B902.  The scale factor is used to compute the
-vehicle yaw thrust angle, which is periodic with True Anomaly (TA).
-
-Function export_yaw_sf() is provided to read the first two columns of 
-sheet "trajectory" and write it out as a JSON file.  It is intended that 
-the astrodynamics simulation call a JSON function to read the appropriate 
-element from this file for each revolution.
-
-Error analysis of this algorithm shows that for the 500x500 table size,
+Error analysis of this algorithm shows that for a 500x500 table size,
 the max error in lambda is 0.004 and in orbit ratio 0.01.  The error
-is computed on inv_phi as the difference in given value and table value.  
+is computed on inv_phi as the difference in given value and table value.
 
-Note that the Match function introduces a systematic error since it locates the 
-value that is less than or equal to the given value.
+Reference Wiesel and Alfano, 1983, "Optimal Many-Revolution Orbit Transfer".
+Reference Sec. 6.7, Vallado, "Fundamentals of Astrodynamics and Applications," 
+4th edition.
 
-@author: Colin Helms, chelms@socal.rr.com
+@author: Colin Helms, colinhelms@outlook.com
 
+@copyright Freelance Rocket Science, 2022
+
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 @change Log:
     06 May 2018, baseline version, generates 3D plot using AlfanoLib.
@@ -66,6 +62,7 @@ value that is less than or equal to the given value.
     09 Mar 2019, added capabilty to generate full controls in Transfer sheet using macros
     15 Mar 2019, New high precision algorithm, per "Simulating Alfano Trajectory ...r0.4.docx"
     21 May 2019, Factored out lin_interp() to AlfanoLib.  Used in YawAngles.py.
+    23 Feb 2022, Fixed Issue 02212022, Implemented a shared file containing path to controls file.
 """
 import os
 import platform
@@ -76,7 +73,7 @@ import numpy as np
 import xlsxwriter as xl
 from xlsxwriter import utility as xlut
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
-
+from pathlib import Path
 from alfano import AlfanoLib as alf
 
 jfilename = 'Controls.json'
@@ -118,15 +115,19 @@ def lin_interp(l_hi, l_lo, lamb, u_lo, u_hi):
     """
     return u_lo + (u_hi - u_lo) * (l_hi - lamb)/(l_hi - l_lo)
 
-def export_controls(data: dict, jfile = ".\\{0}".format(jfilename)):
+def export_controls(data: dict, jfile = Path(jfilename)):
     """ Function is used to write out a JSON file containing computed Alfano 
     control values by rows of orbit ratio and columns of lambda costate.
     """
+    msg = 'Please wait again.  Translating controls to JSON format via AlfanoLib.dump'
+    logging.info(msg)
+    print(msg)
+
     try:       
         """ Dump data to JSON formatted text file """
         with open(jfile, 'w+') as fp:
             alf.dump(data, fp)
-            """ Use overloaded dump function.  Fix to serialize ndarray. """
+            """ Use overloaded dump function.  Fixed to serialize numpy ndarray. """
             
     except OSError as e:
         logging.error("Unable to write file: %s. %s", e.filename, e.strerror)
@@ -273,9 +274,7 @@ if __name__ == "__main__":
         
         costates[row] = L
         
-        msg = "Developing costates for orbit ratio {0}".format(R)
-        print(msg)
-        logging.debug(msg)
+        print('Lambda costates calculated for orbit ratio {0}'.format(R))
         
         for lamb in alf.Lambda:
             """ Collect the set of u that is mapped to this costate, each element
@@ -316,8 +315,9 @@ if __name__ == "__main__":
                 
             col += 1
         row += 1
-         
-    logging.info("Completed Calculation of costates. Rows: %d, Columns: %d. Costate worksheet written. ", row, col)
+
+    msg = 'Completed Calculation of lambda costates. Rows: {0}, Columns: {1}.'.format(row, col)
+    logging.info(msg)
     
     trajSht.write_string('A1', 'cv = f(R,Lambda)', cell_bold)
     trajSht.write_row('B1', alf.Lambda, cell_bold)
@@ -364,13 +364,15 @@ if __name__ == "__main__":
         iaSht.write_column(1, col + 1, delta_i)
         
         msg ="Writing U column vector for costate {0}".format(lamb)
-
         print(msg)
         logging.debug(msg)
            
         col += 1
 
     col = 0
+
+    print('Please be patient, creating dida worksheet - change of inclination with R for each lambda, requires minutes.')
+
     for cv in alf.u:
         """ Fill in altitude summation formula """
         row = 0
@@ -382,21 +384,29 @@ if __name__ == "__main__":
             
             row +=1
         col+=1
-    
-    logging.info("Completed Inverse Phi(). Columns: %d. Trajectory worksheet written.", col)
-                                
+
+    msg = 'Completed computation of Alfano Phi() for all costates in Lambda. {0} column vectors.).'.format(col)
+    logging.info(msg)
+    print(msg)
+
     jfile = QFileDialog().getSaveFileName(None, 
                        'Select JSON Control File for Output.', 
                        os.getenv('USERPROFILE'),
                        filter='Text files(*.json)')
 
     # AlfanoLib Issue 02212022-001, Bad Default Path in YawAngles
-    with open('./SavedJsonPath', 'w+') as fd:
-        """ Filename 'SavedJsonPath' located in CWD constitutes an interface agreement with YawAngles.py."""
-        fd.write(jfile)
-        fd.flush()
+    sharedfname = Path.cwd() / Path('SavedJsonPath')
 
-    logging.info('Selected JSON Control file is %s', jfile[0])
+    try:
+        with open(sharedfname, 'w+') as fd:
+            """ Filename 'SavedJsonPath' located in CWD constitutes an interface agreement with YawAngles.py."""
+            rval = fd.write(jfile[0])
+
+        logging.info('{0} contains controls filename {1}'.format(sharedfname, jfile[0]))
+
+    except OSError as e:
+        logging.exception('SaveJsonPath could not be opened for writing.\n{0}'.format(__doc__))
+        print('SaveJsonPath could not be opened for writing {0}.'.format(jfile[0]))
     
     export_controls(alf.UbyRbyL, jfile[0])
 
