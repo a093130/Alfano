@@ -79,6 +79,7 @@ from logging import NullHandler
 import numpy as np
 import json as js
 from pathlib import Path
+from pathlib import PurePath #Issue 03092022-001
 from alfano import AlfanoLib as alf
 
 _fp = None
@@ -271,7 +272,13 @@ def read_controlfile(ctlfile=None):
     global _fp
 
     # Begin Issue 02212022-001 Fix
-    sharedfname = Path.cwd() / Path('SavedJsonPath')
+    #sharedfname = Path.cwd() / Path('SavedJsonPath')
+    """ SavedJsonPath filename constitutes an interface agreement with GenerateControlTable."""
+
+    #Begin Issue 03092022-001 Fix
+    thispath = PurePath(__file__)
+    print(thispath)
+    sharedfname = thispath.parent/'SavedJsonPath'
     """ SavedJsonPath filename constitutes an interface agreement with GenerateControlTable."""
 
     try:
