@@ -277,7 +277,7 @@ def read_controlfile(ctlfile=None):
 
     #Begin Issue 03092022-001 Fix
     thispath = PurePath(__file__)
-    print(thispath)
+
     sharedfname = thispath.parent/'SavedJsonPath'
     """ SavedJsonPath filename constitutes an interface agreement with GenerateControlTable."""
 
