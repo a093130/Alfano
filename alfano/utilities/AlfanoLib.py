@@ -57,9 +57,9 @@
     for integration of new, complete costate table with GMAT.
 21 May 2019 - version 0.3a, factored out lin_interp() to AlfanoLib.  Used in YawAngles and GenerateControlTable.
 21 Jun 2019 - version 0.4a, fixed computational errors.
+25 May 2022 - version 0.5b, Packaged for distribution, added docs
 """
 import numpy as np
-#import base64
 import json as js
 import logging
 import traceback
@@ -339,10 +339,6 @@ def cb_json_to_ndarray(dct):
     Parameters:
         dct: (dict) json encoded ndarray
     """
-#    if isinstance(dct, dict) and '__ndarray__' in dct:
-#        data = base64.b64decode(dct['__ndarray__'])        
-#        return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
-#        return np.frombuffer(data, dtype=dct['dtype']).reshape(dct['shape'])
     
     if (dct, dict):
         return(dct)
@@ -489,18 +485,6 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
     plt.close()
-#    fig, axs = plt.subplots(2,1)
-
-#    Pplot, Rplot = axs[0].plot(u, P, 'm.', u, R, 'c.')
-#    dPplot, dRplot = axs[1].plot(u, dP, 'm-', u, dR, 'c-')
-
-#    fig.legend((Pplot, Rplot),('P(u)','R(u)'), 'upper right')
-#    fig.legend((dPplot, dRplot), ('dP(u)/du', 'dR(u)/du'), 'right')
-#    plt.xlabel('u')
-#    plt.title('P(u) and R(u)')
-    plt.tight_layout()
-    plt.show()
-    plt.close()
 
     fig = plt.figure(figsize=(10, 8))
     
@@ -513,8 +497,6 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
     plt.close()
-   
-
 
     fig = plt.figure(figsize=(10, 8))
     
@@ -528,30 +510,6 @@ if __name__ == "__main__":
     plt.show()
     plt.close()
 
-#    fig = plt.figure(figsize=(10,10))
-#    ax = plt.subplot(2, 1, 1)
-    
-#    costates=costate(0.25, a)
-    
-#    plt.plot(u, phi, 'bo')
-#    plt.ylabel('costate')
-#    plt.xlabel('Orbit Ratio')
-#    plt.title('Costate, u=0.25, R=1-10') 
-    
-#    ax = plt.subplot(2, 1, 2)
-#    trans_offset = mtransforms.offset_copy(ax.transData, fig=fig, x=-0.5, y=-0.05, units='inches')
-    
-#    costates=costate(phi)
-    
-#    plt.plot(u, costates, 'b.')
-#    plt.ylabel('costate')
-#    plt.xlabel('control variable')
-#    plt.title('Costate, u=0-1, R=6.6')
-    
-#    plt.tight_layout()
-#    plt.show()
-#    plt.close()
-    
    
     """ Wireframe Plot of Costate """
 
@@ -564,7 +522,7 @@ if __name__ == "__main__":
     """
     TODO: Neat trick to transpose the elements of a list from 
     https://docs.python.org/3/tutorial/datastructures.html?highlight=transpose
-    zip(*X) makes an iterator that aggregates elements.  We don't use it here.
+    zip(*X) makes an iterator that aggregates elements.
     """
   
     #Express the costates as functions of u and a, where i in a and j in u
