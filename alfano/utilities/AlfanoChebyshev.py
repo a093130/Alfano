@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+#! python
+# # -*- coding: utf-8 -*-
 """
 Created on Sat Apr 28 11:11:52 2018
 
@@ -10,9 +11,8 @@ The algorithm is the Chebychev polynomial approximation from Appendix A of
 Wiesel and Alfano, "Optimal Many-Revolution Orbit Transfer".
 Also see equation 6-55, Vallado "Fundamentals of Astrodynamcs", 4th ed.
 
-@author: Colin Helms, colinhelms@outlook.com
-
-@copyright Freelance Rocket Science, 2022
+@author: Colin Helms
+@author_email: colinhelms@outlook.com
 
 @license
     This program is free software: you can redistribute it and/or modify

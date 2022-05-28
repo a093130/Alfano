@@ -40,8 +40,7 @@ Created on Sat Apr 28 11:11:52 2018
                     get_yaw_cv()  
 
 @author: Colin Helms
-
-@copyright Copyright Freelance Rocket Science, 2018, 2019
+@author_email: colinhelms@outlook.com
 
 @license
     This program is free software: you can redistribute it and/or modify

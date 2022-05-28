@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+#! python
+# # -*- coding: utf-8 -*-
 """
 @description: This script plots Tau (delta-V) as a function of u, for various orbit ratios.
 Reference "Optimal Many-revolution Orbit Transfer,\" Alfano & Wiesel 1985.
@@ -6,8 +7,7 @@ Reference "Optimal Many-revolution Orbit Transfer,\" Alfano & Wiesel 1985.
 @version 0.1a1
 
 @author: Colin Helms
-
-@copyright Freelance Rocket Science, 2022
+@author_email: colinhelms@outlook.com
 
 @license
     This program is free software: you can redistribute it and/or modify

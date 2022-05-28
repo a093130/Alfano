@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+#! python
+# # -*- coding: utf-8 -*-
 """
 @version 0.2a1
 
@@ -13,8 +14,7 @@ When executed rather than imported as a library,
 this script plots its two functions as a function of u.  
 
 @author: Colin Helms
-
-@copyright Freelance Rocket Science, 2022
+@author_email: colinhelms@outlook.com
 
 @license
     This program is free software: you can redistribute it and/or modify

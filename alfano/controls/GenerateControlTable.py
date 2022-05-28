@@ -36,9 +36,22 @@ Reference Wiesel and Alfano, 1983, "Optimal Many-Revolution Orbit Transfer".
 Reference Sec. 6.7, Vallado, "Fundamentals of Astrodynamics and Applications," 
 4th edition.
 
-@author: Colin Helms, colinhelms@outlook.com
+@author: Colin Helms
+@author_email: colinhelms@outlook.com
 
-@copyright Freelance Rocket Science, 2022
+@license
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 @license
     This program is free software: you can redistribute it and/or modify
