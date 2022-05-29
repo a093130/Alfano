@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @Name: AlfanoLib 
-@Version: 0.5a1
+@Version: 0.5b1
 
 Created on Sun Apr 28 15:28:56 2019
 

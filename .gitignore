@@ -5,9 +5,10 @@
 *.sav
 *.tar
 *.json
-build/
-dist/
+build/*
+dist/*
 *-workspace
 ~*
 SavedJsonPath
+*.egg-info
 
