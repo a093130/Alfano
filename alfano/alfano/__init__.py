@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-@name: alfano 
+@name: AlfanoLib 
 @version: 0.5b1
 
 Created on Sun Apr 28 15:28:56 2019
@@ -18,5 +18,6 @@ if sys.version_info[:2] < (3, 4):
     raise ImportError(m % sys.version_info[:2])
 del sys
 
-from alfano import controls
-from alfano import utilities
+from .utilities import AlfanoLib
+from .controls import YawAngles
+from .controls import GenerateControlTable
